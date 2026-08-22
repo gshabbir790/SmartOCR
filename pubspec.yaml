@@ -1,0 +1,33 @@
+name: smart_ocr
+version: 1.0.0+1
+description: Offline-first AI OCR scanner with Android Share Sheet integration.
+publish_to: none
+environment:
+  sdk: '>=3.12.0 <4.0.0'
+  flutter: '>=3.44.0'
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+  camera: ^0.11.2
+  image_picker: ^1.2.3
+  image: ^4.5.4
+  path_provider: ^2.1.5
+  path: ^1.9.1
+  hive: ^2.2.3
+  hive_flutter: ^1.1.0
+  share_plus: ^11.0.0
+  url_launcher: ^6.3.2
+  http: ^1.5.0
+  uuid: ^4.5.1
+  tesseract_ocr: ^0.5.0
+  shared_preferences: ^2.5.3
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/tessdata/

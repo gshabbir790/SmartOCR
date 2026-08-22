@@ -1,0 +1,7 @@
+name = "smart-ocr-api"
+main = "worker.js"
+compatibility_date = "2026-08-21"
+
+[vars]
+AI_PROVIDER_URL = "https://YOUR_PROVIDER_ENDPOINT"
+# Set AI_PROVIDER_KEY as a secret with: wrangler secret put AI_PROVIDER_KEY

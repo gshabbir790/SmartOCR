@@ -1,0 +1,7 @@
+import 'dart:io';
+import 'package:flutter/material.dart';
+import '../../services/storage/history_repository.dart';
+import '../ocr/ocr_result_screen.dart';
+
+class HistoryScreen extends StatefulWidget { const HistoryScreen({super.key, required this.history}); final HistoryRepository history; @override State<HistoryScreen> createState()=>_HistoryScreenState(); }
+class _HistoryScreenState extends State<HistoryScreen>{@override Widget build(BuildContext context){final items=widget.history.all();return Scaffold(appBar:AppBar(title:const Text('History'),actions:[if(items.isNotEmpty)IconButton(onPressed:()async{await widget.history.clear();setState((){});},icon:const Icon(Icons.delete_sweep_outlined))]),body:items.isEmpty?const Center(child:Text('No scans yet.')):ListView.separated(padding:const EdgeInsets.all(16),itemCount:items.length,separatorBuilder:(_,__)=>const SizedBox(height:8),itemBuilder:(context,i){final item=items[i];return Card(child:ListTile(onTap:()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>OcrResultScreen(item:item,imagePaths:[item.path],history:widget.history))),leading:ClipRRect(borderRadius:BorderRadius.circular(10),child:File(item.path).existsSync()?Image.file(File(item.path),width:54,height:54,fit:BoxFit.cover):const SizedBox(width:54,height:54,child:Icon(Icons.description))),title:Text(item.title),subtitle:Text(item.text,maxLines:2,overflow:TextOverflow.ellipsis)));}));}}
