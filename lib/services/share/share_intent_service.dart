@@ -10,12 +10,18 @@ class ShareIntentService {
     _channel.setMethodCallHandler((call) async {
       if (call.method == 'sharedImages') {
         final paths = List<String>.from(call.arguments as List);
-        if (paths.isNotEmpty) _controller.add(paths);
+        // یہاں بریکٹس { } شامل کیے گئے ہیں
+        if (paths.isNotEmpty) {
+          _controller.add(paths);
+        }
       }
     });
     try {
       final paths = await _channel.invokeMethod<List<dynamic>>('getInitialImages');
-      if (paths != null && paths.isNotEmpty) _controller.add(List<String>.from(paths));
+      // یہاں بھی بریکٹس { } شامل کیے گئے ہیں
+      if (paths != null && paths.isNotEmpty) {
+        _controller.add(List<String>.from(paths));
+      }
     } catch (_) {}
   }
 }
