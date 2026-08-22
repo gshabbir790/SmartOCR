@@ -1,81 +1,47 @@
-name: Unzip SmartOCR and Push
+name: Flutter APK Build
 
 on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
-permissions:
-  contents: write
-
 jobs:
-  unzip-and-push:
+  build:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
+      - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Find SmartOCR ZIP
-        run: |
-          find . -maxdepth 2 -type f -iname "SmartOCR*.zip" -print
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: zulu
+          java-version: '17'
 
-      - name: Unzip SmartOCR
-        run: |
-          ZIP_FILE=$(find . -maxdepth 2 -type f -iname "SmartOCR*.zip" | head -n 1)
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
 
-          if [ -z "$ZIP_FILE" ]; then
-            echo "SmartOCR ZIP file not found!"
-            exit 1
-          fi
+      - name: Show Flutter Version
+        run: flutter --version
 
-          echo "Using: $ZIP_FILE"
+      - name: Install Dependencies
+        run: flutter pub get
 
-          mkdir -p extracted
-          unzip -o "$ZIP_FILE" -d extracted
+      - name: Analyze Project
+        run: flutter analyze
 
-          echo "Extracted files:"
-          find extracted -maxdepth 3 -type f | head -100
+      - name: Build Release APK
+        run: flutter build apk --release --no-tree-shake-icons
 
-      - name: Move project to repository root
-        run: |
-          shopt -s dotglob
-
-          SOURCE="extracted"
-
-          # Handle ZIPs containing SmartOCR-main/ or SmartOCR/
-          if [ -d "extracted/SmartOCR-main" ]; then
-            SOURCE="extracted/SmartOCR-main"
-          elif [ -d "extracted/SmartOCR" ]; then
-            SOURCE="extracted/SmartOCR"
-          fi
-
-          echo "Project source: $SOURCE"
-
-          # Copy project files into repository root
-          cp -a "$SOURCE"/. .
-
-          rm -rf extracted
-
-      - name: Remove ZIP
-        run: |
-          find . -maxdepth 2 -type f -iname "SmartOCR*.zip" -delete
-
-      - name: Show project structure
-        run: |
-          echo "Repository structure:"
-          find . -maxdepth 2 -type f \
-            ! -path "./.git/*" | sort | head -200
-
-      - name: Commit and push
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-          git add .
-
-          if git diff --cached --quiet; then
-            echo "No changes to commit."
-            exit 0
-          fi
-
-          git commit -m "Unzip SmartOCR project into repository"
-          git push
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: smart-ocr-release-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
