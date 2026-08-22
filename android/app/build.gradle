@@ -13,8 +13,7 @@ if (keystorePropertiesFile.exists()) {
 
 android {
     namespace 'com.gshabbir.ocrscanner'
-    compileSdk 36
-    ndkVersion "28.2.13676358"
+    compileSdk 35
 
     defaultConfig {
         applicationId 'com.gshabbir.ocrscanner'
@@ -24,13 +23,14 @@ android {
         versionName '1.0.0'
     }
 
+    // یہ دو بلاکس جاوا اور کوٹلن کے ورژن 17 کے لیے شامل کیے گئے ہیں
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
     }
 
     kotlinOptions {
-        jvmTarget = "17"
+        jvmTarget = '17'
     }
 
     signingConfigs {
