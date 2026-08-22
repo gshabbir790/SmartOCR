@@ -11,7 +11,11 @@ abstract interface class OcrProvider {
 class LocalTesseractProvider implements OcrProvider {
   @override
   Future<OcrResult> recognize(String path, {String language = 'eng'}) async {
-    if (!await File(path).exists()) throw const FileSystemException('Image not found');
+    // یہاں بریکٹس { } شامل کیے گئے ہیں
+    if (!await File(path).exists()) {
+      throw const FileSystemException('Image not found');
+    }
+    
     final config = OCRConfig(
       language: language,
       engine: OCREngine.tesseract,
@@ -22,7 +26,12 @@ class LocalTesseractProvider implements OcrProvider {
     final text = await TesseractOcr.extractText(path, config: config);
     final cleaned = text.trim();
     final confidence = cleaned.isEmpty ? 0.0 : 0.82;
-    return OcrResult(text: cleaned, language: language, confidence: confidence, blocks: cleaned.isEmpty ? [] : [OcrBlock(text: cleaned, confidence: confidence)]);
+    return OcrResult(
+      text: cleaned, 
+      language: language, 
+      confidence: confidence, 
+      blocks: cleaned.isEmpty ? [] : [OcrBlock(text: cleaned, confidence: confidence)]
+    );
   }
 }
 
@@ -51,7 +60,12 @@ class OcrService {
       preparedPath = path;
     }
     final result = await local.recognize(preparedPath, language: language);
-    if (result.text.isEmpty) throw const FormatException('No readable text found.');
+    
+    // یہاں بھی بریکٹس { } شامل کیے گئے ہیں
+    if (result.text.isEmpty) {
+      throw const FormatException('No readable text found.');
+    }
+    
     return result;
   }
 }
