@@ -29,8 +29,10 @@ jobs:
 
       - name: Show Flutter Version
         run: flutter --version
+      - name: Precache Flutter Android artifacts
+        run: flutter precache --android
 
-      - name: Install Dependencies
+      - name: Get Dependencies
         run: flutter pub get
 
       - name: Analyze Project
