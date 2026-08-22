@@ -29,12 +29,14 @@ dependencyResolutionManagement {
         google()
         mavenCentral()
 
-        // Flutter engine/plugin Android artifacts
         maven {
             url = uri("${System.getenv("FLUTTER_ROOT")}/bin/cache/artifacts/engine/android")
         }
+
+        maven {
+            url = uri("https://jitpack.io")
+        }
     }
 }
-
 rootProject.name = 'smart_ocr'
 include ':app'
