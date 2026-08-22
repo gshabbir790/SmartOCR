@@ -1,14 +1,14 @@
-gradle-wrapper.jar (binary file) could not be generated in this environment
-(no network / no local Gradle install available here).
+gradle-wrapper.jar is intentionally not committed as a binary in this
+package (it couldn't be produced in the environment that generated this
+project). This is now handled automatically:
 
-Fix — pick ONE:
-1. Open this project folder in Android Studio once. It detects the missing
-   wrapper jar and regenerates it automatically.
-2. Or, with Gradle installed locally, run from the android/ folder:
-     gradle wrapper --gradle-version 8.10.2
-3. Or, with Flutter installed, just run `flutter build apk` from the project
-   root once — recent Flutter versions bootstrap the Gradle wrapper jar
-   automatically if it's missing.
+gradlew / gradlew.bat check for gradle/wrapper/gradle-wrapper.jar on first
+run and download the official one from the Gradle project's own GitHub repo
+if it's missing. You need an internet connection the very first time you
+run `flutter build apk` (or `./gradlew` directly) — after that it's cached
+locally and no further downloads happen.
 
-gradlew and gradlew.bat (the wrapper *scripts*) are already included and
-correct — only the jar binary is missing.
+If that auto-download ever fails (e.g. no internet, or a restrictive
+network/proxy blocking raw.githubusercontent.com), just open the project
+once in Android Studio instead — it regenerates the wrapper automatically
+too.
