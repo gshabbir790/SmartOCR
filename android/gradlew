@@ -104,6 +104,25 @@ esac
 
 CLASSPATH="$APP_HOME/gradle/wrapper/gradle-wrapper.jar"
 
+# --- Auto-bootstrap gradle-wrapper.jar if it's missing --------------------
+# This project was generated without the binary gradle-wrapper.jar. If it's
+# not present, fetch the official one from the Gradle project's own GitHub
+# repo (it's checked in there for every release) before continuing.
+if [ ! -f "$CLASSPATH" ]; then
+    WRAPPER_VERSION=$(sed -n 's/.*gradle-\([0-9.]*\)-bin\.zip.*/\1/p' "$APP_HOME/gradle/wrapper/gradle-wrapper.properties")
+    [ -z "$WRAPPER_VERSION" ] && WRAPPER_VERSION="8.10.2"
+    WRAPPER_URL="https://raw.githubusercontent.com/gradle/gradle/v${WRAPPER_VERSION}/gradle/wrapper/gradle-wrapper.jar"
+    echo "gradle-wrapper.jar not found — downloading it once from $WRAPPER_URL"
+    mkdir -p "$APP_HOME/gradle/wrapper"
+    if command -v curl >/dev/null 2>&1; then
+        curl -fsSL -o "$CLASSPATH" "$WRAPPER_URL" || die "Could not download gradle-wrapper.jar. Check your internet connection, or open this project once in Android Studio to let it regenerate the Gradle wrapper automatically."
+    elif command -v wget >/dev/null 2>&1; then
+        wget -q -O "$CLASSPATH" "$WRAPPER_URL" || die "Could not download gradle-wrapper.jar. Check your internet connection, or open this project once in Android Studio to let it regenerate the Gradle wrapper automatically."
+    else
+        die "Neither curl nor wget is available to fetch gradle-wrapper.jar. Open this project once in Android Studio instead — it regenerates the wrapper automatically."
+    fi
+fi
+
 
 # Determine the Java command to use to start the JVM.
 if [ -n "$JAVA_HOME" ] ; then

@@ -70,6 +70,19 @@ goto fail
 
 set CLASSPATH=%APP_HOME%\gradle\wrapper\gradle-wrapper.jar
 
+if exist "%CLASSPATH%" goto execute
+
+echo gradle-wrapper.jar not found - downloading it once...
+set WRAPPER_URL=https://raw.githubusercontent.com/gradle/gradle/v8.10.2/gradle/wrapper/gradle-wrapper.jar
+powershell -NoProfile -ExecutionPolicy Bypass -Command "try { Invoke-WebRequest -Uri '%WRAPPER_URL%' -OutFile '%CLASSPATH%' } catch { exit 1 }"
+if not exist "%CLASSPATH%" (
+    echo.
+    echo ERROR: Could not download gradle-wrapper.jar automatically. 1>&2
+    echo Check your internet connection, or open this project once in 1>&2
+    echo Android Studio to let it regenerate the Gradle wrapper. 1>&2
+    goto fail
+)
+
 
 @rem Execute Gradle
 "%JAVA_EXE%" %DEFAULT_JVM_OPTS% %JAVA_OPTS% %GRADLE_OPTS% "-Dorg.gradle.appname=%APP_BASE_NAME%" -classpath "%CLASSPATH%" org.gradle.wrapper.GradleWrapperMain %*
