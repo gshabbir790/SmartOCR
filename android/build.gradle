@@ -1,29 +1,25 @@
-allprojects {
-    repositories {
-        google()
-        mavenCentral()
+plugins {
+    id 'com.android.application' version '8.7.3' apply false
+    id 'org.jetbrains.kotlin.android' version '2.1.20' apply false
+}
+
+// Some third-party plugins (e.g. tesseract_ocr) don't declare their own
+// compileOptions/kotlinOptions, so they fall back to old defaults (Java 8)
+// while the current Kotlin Gradle Plugin defaults newer. That mismatch is
+// what causes "Inconsistent JVM Target Compatibility" errors. Force every
+// module — our app AND every plugin pulled in as a subproject — onto the
+// same JVM target so this can't happen regardless of what a plugin sets.
+subprojects {
+    afterEvaluate { proj ->
+        if (proj.plugins.hasPlugin("com.android.application") || proj.plugins.hasPlugin("com.android.library")) {
+            proj.android {
+                compileOptions {
+                    sourceCompatibility = JavaVersion.VERSION_17
+                    targetCompatibility = JavaVersion.VERSION_17
+                }
+            }
+        }
     }
-}
-
-rootProject.buildDir = "../build"
-subprojects {
-    project.buildDir = "${rootProject.buildDir}/${project.name}"
-}
-subprojects {
-    project.evaluationDependsOn(":app")
-}
-
-tasks.register("clean", Delete) {
-    delete rootProject.buildDir
-}
-
-// Ensure all subprojects/plugins (like tesseract_ocr) target Java 17 and Kotlin 17
-subprojects {
-    tasks.withType(JavaCompile).configureEach {
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
-    }
-
     tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
         kotlinOptions {
             jvmTarget = "17"
