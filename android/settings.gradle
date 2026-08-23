@@ -6,37 +6,16 @@ pluginManagement {
         assert flutterSdkPath != null, 'flutter.sdk not set in local.properties'
         return flutterSdkPath
     }()
-
     includeBuild("${flutterSdkPath}/packages/flutter_tools/gradle")
-
-    repositories {
-        google()
-        mavenCentral()
-        gradlePluginPortal()
-    }
+    // repo1.maven.org is Maven Central's direct origin (no CDN in front of
+    // it). Listed as a fallback in case plugins.gradle.org / the
+    // repo.maven.apache.org CDN returns a transient 403 during resolution,
+    // which is a known intermittent issue on GitHub Actions runners.
+    repositories { google(); mavenCentral(); maven { url 'https://repo1.maven.org/maven2' }; gradlePluginPortal() }
 }
-
-plugins {
-    id "dev.flutter.flutter-plugin-loader" version "1.0.0"
-    id "com.android.application" version "8.11.1" apply false
-    id "org.jetbrains.kotlin.android" version "2.2.20" apply false
-}
-
 dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
-
-    repositories {
-        google()
-        mavenCentral()
-
-        maven {
-            url = uri("https://storage.googleapis.com/download.flutter.io")
-        }
-
-        maven {
-            url = uri("https://jitpack.io")
-        }
-    }
+    repositories { google(); mavenCentral(); maven { url 'https://repo1.maven.org/maven2' } }
 }
 rootProject.name = 'smart_ocr'
 include ':app'
