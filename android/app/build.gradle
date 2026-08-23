@@ -1,46 +1,26 @@
-plugins {
-    id 'com.android.application'
-    id 'org.jetbrains.kotlin.android'
-    id 'dev.flutter.flutter-gradle-plugin'
-}
+plugins { id 'com.android.application'; id 'org.jetbrains.kotlin.android'; id 'dev.flutter.flutter-gradle-plugin' }
 
 def keystoreProperties = new Properties()
 def keystorePropertiesFile = rootProject.file('key.properties')
-
 if (keystorePropertiesFile.exists()) {
     keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
 }
 
-android {
-    namespace 'com.gshabbir.ocrscanner'
-    compileSdk 35
+android { namespace 'com.gshabbir.ocrscanner'; compileSdk 36; ndkVersion "28.2.13676358"
+    defaultConfig { applicationId 'com.gshabbir.ocrscanner'; minSdk 24; targetSdk 36; versionCode 1; versionName '1.0.0' }
 
-    defaultConfig {
-        applicationId 'com.gshabbir.ocrscanner'
-        minSdk 24
-        targetSdk 35
-        versionCode 1
-        versionName '1.0.0'
-    }
-
-    // یہ دو بلاکس جاوا اور کوٹلن کے ورژن 17 کے لیے شامل کیے گئے ہیں
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
     }
-
-    kotlinOptions {
-        jvmTarget = '17'
-    }
+    kotlinOptions { jvmTarget = "17" }
 
     signingConfigs {
         release {
             if (keystorePropertiesFile.exists()) {
                 keyAlias keystoreProperties['keyAlias']
                 keyPassword keystoreProperties['keyPassword']
-                storeFile keystoreProperties['storeFile']
-                    ? file(keystoreProperties['storeFile'])
-                    : null
+                storeFile keystoreProperties['storeFile'] ? file(keystoreProperties['storeFile']) : null
                 storePassword keystoreProperties['storePassword']
             }
         }
@@ -48,21 +28,14 @@ android {
 
     buildTypes {
         release {
-            signingConfig = keystorePropertiesFile.exists()
-                ? signingConfigs.release
-                : signingConfigs.debug
-
+            // Falls back to debug signing only if key.properties is missing, so
+            // `flutter build apk --release` still works out of the box in CI/dev.
+            signingConfig = keystorePropertiesFile.exists() ? signingConfigs.release : signingConfigs.debug
             minifyEnabled true
             shrinkResources true
-
-            proguardFiles(
-                getDefaultProguardFile('proguard-android-optimize.txt'),
-                'proguard-rules.pro'
-            )
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
 }
 
-flutter {
-    source '../..'
-}
+flutter { source '../..' }
