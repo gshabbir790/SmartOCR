@@ -7,15 +7,15 @@ pluginManagement {
         return flutterSdkPath
     }()
     includeBuild("${flutterSdkPath}/packages/flutter_tools/gradle")
-    // repo1.maven.org is Maven Central's direct origin (no CDN in front of
-    // it). Listed as a fallback in case plugins.gradle.org / the
-    // repo.maven.apache.org CDN returns a transient 403 during resolution,
-    // which is a known intermittent issue on GitHub Actions runners.
-    repositories { google(); mavenCentral(); maven { url 'https://repo1.maven.org/maven2' }; gradlePluginPortal() }
+    repositories { google(); mavenCentral(); gradlePluginPortal() }
 }
-dependencyResolutionManagement {
-    repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
-    repositories { google(); mavenCentral(); maven { url 'https://repo1.maven.org/maven2' } }
-}
+// NOTE: no dependencyResolutionManagement block here on purpose. Setting
+// repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS) blocks the Flutter
+// Gradle plugin from adding its own project-level repository for the
+// io.flutter:*_release engine artifacts, which causes:
+//   "Could not find io.flutter:armeabi_v7a_release:..."
+// Each subproject (the Flutter plugin's own :flutter module, :app, and any
+// plugin) is left free to declare the repositories it needs, same as the
+// standard `flutter create` template.
 rootProject.name = 'smart_ocr'
 include ':app'
