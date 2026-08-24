@@ -3,20 +3,6 @@ plugins {
     id 'org.jetbrains.kotlin.android' version '2.2.20' apply false
 }
 
-// Some third-party plugins (e.g. tesseract_ocr) don't declare their own
-// compileOptions/kotlinOptions, so they fall back to old defaults (Java 8)
-// while the current Kotlin Gradle Plugin defaults newer. That mismatch is
-// what causes "Inconsistent JVM Target Compatibility" errors. Force every
-// module onto the same JVM target so this can't happen regardless of what
-// a plugin sets.
-//
-// NOTE: deliberately no root-level `allprojects { repositories {...} } `
-// block here. That was tried once and it broke resolution of Flutter's own
-// embedding classes (FlutterActivity/FlutterEngine/MethodChannel) in :app,
-// because it interfered with the Flutter Gradle plugin's own project-level
-// repository setup. Any extra repositories a specific module needs (e.g.
-// :app needing kotlin-stdlib) are declared directly in that module's own
-// build.gradle instead — see android/app/build.gradle.
 subprojects {
     afterEvaluate { proj ->
         if (proj.plugins.hasPlugin("com.android.application") || proj.plugins.hasPlugin("com.android.library")) {
