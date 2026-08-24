@@ -3,12 +3,29 @@ plugins {
     id 'org.jetbrains.kotlin.android' version '2.2.20' apply false
 }
 
+// Give every module (our app AND every plugin, e.g. tesseract_ocr, camera,
+// image_picker) access to google()/mavenCentral() for regular dependency
+// resolution (things like kotlin-stdlib). This is deliberately old-style,
+// per-project repository declaration rather than a centralized
+// dependencyResolutionManagement block in settings.gradle — that block was
+// tried and reverted because RepositoriesMode.PREFER_SETTINGS blocks the
+// Flutter Gradle plugin from adding its own project-level repository for
+// the io.flutter:*_release engine artifacts ("Could not find
+// io.flutter:armeabi_v7a_release..."). This allprojects approach avoids
+// that conflict entirely while still resolving normal dependencies.
+allprojects {
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+
 // Some third-party plugins (e.g. tesseract_ocr) don't declare their own
 // compileOptions/kotlinOptions, so they fall back to old defaults (Java 8)
 // while the current Kotlin Gradle Plugin defaults newer. That mismatch is
 // what causes "Inconsistent JVM Target Compatibility" errors. Force every
-// module — our app AND every plugin pulled in as a subproject — onto the
-// same JVM target so this can't happen regardless of what a plugin sets.
+// module onto the same JVM target so this can't happen regardless of what
+// a plugin sets.
 subprojects {
     afterEvaluate { proj ->
         if (proj.plugins.hasPlugin("com.android.application") || proj.plugins.hasPlugin("com.android.library")) {
