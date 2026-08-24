@@ -1,5 +1,16 @@
 plugins { id 'com.android.application'; id 'org.jetbrains.kotlin.android'; id 'dev.flutter.flutter-gradle-plugin' }
 
+// Only :app needs this — it resolves plain dependencies like kotlin-stdlib
+// that the Flutter Gradle plugin's own injected repository doesn't carry.
+// Declared here (module-level) rather than at the root as `allprojects`,
+// because doing it at the root previously interfered with how the Flutter
+// Gradle plugin sets up :app's own repository for engine/embedding
+// artifacts (io.flutter:flutter_embedding_release etc.).
+repositories {
+    google()
+    mavenCentral()
+}
+
 def keystoreProperties = new Properties()
 def keystorePropertiesFile = rootProject.file('key.properties')
 if (keystorePropertiesFile.exists()) {
@@ -28,8 +39,6 @@ android { namespace 'com.gshabbir.ocrscanner'; compileSdk 36; ndkVersion "28.2.1
 
     buildTypes {
         release {
-            // Falls back to debug signing only if key.properties is missing, so
-            // `flutter build apk --release` still works out of the box in CI/dev.
             signingConfig = keystorePropertiesFile.exists() ? signingConfigs.release : signingConfigs.debug
             minifyEnabled true
             shrinkResources true
