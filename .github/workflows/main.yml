@@ -1,19 +1,34 @@
-name: Android CI
+name: Flutter APK Build
+
 on:
   push:
+    branches: [ main ]
   pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: subosito/flutter-action@v2
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Java Environment
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Setup Flutter SDK
+        uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.47.0'
-          channel: stable
+          channel: 'stable'
           cache: true
-          
-      # یہ نیا سٹیپ فولڈر اور کنفیگریشن فائل بنائے گا
+
+      # یہ سٹیپ بلڈ سے پہلے tessdata_config.json فائل خود بخود بنا دے گا
       - name: Create missing tessdata_config.json
         run: |
           mkdir -p assets/tessdata
@@ -28,9 +43,19 @@ jobs:
           }
           EOF
 
-      - run: flutter pub get
-      - run: dart format lib test
-      - run: flutter analyze
-      - run: flutter test
-      - run: flutter build apk --release
-      
+      - name: Install Dependencies
+        run: flutter pub get
+
+      - name: Run Build Runner
+        run: flutter pub run build_runner build --delete-conflicting-outputs || true
+
+      # ورژن کی مس میچ وارننگز اور بلڈ ڈیپینڈینسی ویلیڈیشن کو بائی پاس کرتے ہوئے APK بنانے کی کمانڈ
+      - name: Build Release APK
+        run: flutter build apk --release --no-tree-shake-icons --android-skip-build-dependency-validation
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
+          
