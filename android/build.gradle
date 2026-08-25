@@ -6,18 +6,12 @@ allprojects {
 }
 
 rootProject.buildDir = "../build"
+
 subprojects {
     project.buildDir = "${rootProject.buildDir}/${project.name}"
 }
-subprojects {
-    project.evaluationDependsOn(":app")
-}
 
-tasks.register("clean", Delete) {
-    delete rootProject.buildDir
-}
-
-// یہ کوڈ تمام ماڈیولز (جیسے tesseract_ocr) کو زبردستی Java 17 پر سیٹ کرتا ہے
+// 1. Java 17 کی کنفیگریشن ہمیشہ Evaluation سے پہلے ہونی چاہیے
 subprojects {
     afterEvaluate { proj ->
         if (proj.plugins.hasPlugin("com.android.application") || proj.plugins.hasPlugin("com.android.library")) {
@@ -34,4 +28,13 @@ subprojects {
             jvmTarget = "17"
         }
     }
+}
+
+// 2. یہ پراجیکٹ کی Evaluation کو ٹریگر کرتا ہے (اسے آخر میں ہونا چاہیے)
+subprojects {
+    project.evaluationDependsOn(":app")
+}
+
+tasks.register("clean", Delete) {
+    delete rootProject.buildDir
 }
