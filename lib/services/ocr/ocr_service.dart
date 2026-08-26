@@ -6,7 +6,6 @@ import 'package:tesseract_ocr/tesseract_ocr.dart';
 import '../../data/models/ocr_models.dart';
 import '../image/image_preprocessor.dart';
 
-/// Common OCR provider interface.
 abstract interface class OcrProvider {
   Future<OcrResult> recognize(
     String path, {
@@ -14,47 +13,39 @@ abstract interface class OcrProvider {
   });
 }
 
-/// Local Tesseract OCR implementation.
+/// Local Tesseract OCR provider.
 ///
-/// Important:
-/// - "urd" is mapped to "urd_naw" for better Urdu Nastaliq recognition.
-/// - "urd_naw" is the primary Urdu model.
-/// - "urd" remains available as a high-accuracy fallback model.
+/// Urdu strategy:
+///   urd -> urd_naw
 ///
-/// Required traineddata files:
-///   assets/tessdata/eng.traineddata
-///   assets/tessdata/urd_naw.traineddata
-///   assets/tessdata/urd.traineddata
-///   assets/tessdata/ara.traineddata
-///   assets/tessdata/hin.traineddata
+/// The specialized Urdu Nastaliq model is used first.
+/// The official high-accuracy `urd` model is used as a fallback
+/// when explicitly requested by the OCR service.
 class LocalTesseractProvider implements OcrProvider {
-  /// Maps the app's user-facing language code to the actual
-  /// Tesseract traineddata model.
   String _resolveLanguage(String language) {
     switch (language.toLowerCase().trim()) {
-      case 'urdu':
       case 'ur':
+      case 'urdu':
       case 'urd':
-        // Primary Urdu Nastaliq model.
         return 'urd_naw';
-
-      case 'english':
-      case 'en':
-      case 'eng':
-        return 'eng';
-
-      case 'arabic':
-      case 'ar':
-      case 'ara':
-        return 'ara';
-
-      case 'hindi':
-      case 'hi':
-      case 'hin':
-        return 'hin';
 
       case 'urd_naw':
         return 'urd_naw';
+
+      case 'en':
+      case 'english':
+      case 'eng':
+        return 'eng';
+
+      case 'ar':
+      case 'arabic':
+      case 'ara':
+        return 'ara';
+
+      case 'hi':
+      case 'hindi':
+      case 'hin':
+        return 'hin';
 
       default:
         return language;
@@ -77,11 +68,11 @@ class LocalTesseractProvider implements OcrProvider {
     final config = OCRConfig(
       language: resolvedLanguage,
       engine: OCREngine.tesseract,
-      options: {
+      options: const {
         TesseractConfig.preserveInterwordSpaces: '1',
 
-        // auto is more predictable for normal document/poster OCR.
-        // autoOsd can incorrectly detect Urdu/Nastaliq orientation/script.
+        // Do not use autoOsd for Urdu/Nastaliq.
+        // It can incorrectly determine script/orientation.
         TesseractConfig.pageSegMode: PageSegmentationMode.auto,
       },
     );
@@ -91,22 +82,16 @@ class LocalTesseractProvider implements OcrProvider {
       config: config,
     );
 
-    final cleaned = _cleanOcrText(
-      text,
-      language: resolvedLanguage,
-    );
+    final cleaned = _cleanOcrText(text);
 
-    final confidence = _estimateConfidence(
-      cleaned,
-      language: resolvedLanguage,
-    );
+    final confidence = cleaned.isEmpty ? 0.0 : 0.82;
 
     return OcrResult(
       text: cleaned,
       language: resolvedLanguage,
       confidence: confidence,
       blocks: cleaned.isEmpty
-          ? []
+          ? const []
           : [
               OcrBlock(
                 text: cleaned,
@@ -116,20 +101,16 @@ class LocalTesseractProvider implements OcrProvider {
     );
   }
 
-  /// Removes OCR artefacts without reversing Urdu/Arabic text.
+  /// Clean OCR artefacts without reversing Urdu/Arabic characters.
   ///
   /// IMPORTANT:
-  /// We deliberately do NOT reverse RTL text here.
-  /// Urdu/Arabic are Unicode bidirectional scripts and reversing the
-  /// characters manually can corrupt their natural character order.
-  String _cleanOcrText(
-    String text, {
-    required String language,
-  }) {
+  /// Urdu must NOT be manually reversed. Unicode bidi rendering
+  /// handles RTL presentation at the UI level.
+  String _cleanOcrText(String text) {
     var value = text;
 
-    // Remove common invisible bidi control characters that can be
-    // accidentally returned by OCR or introduced during processing.
+    // Remove invisible bidirectional control characters that may
+    // appear in OCR output.
     value = value.replaceAll(
       RegExp(r'[\u061C\u200E\u200F\u202A-\u202E\u2066-\u2069]'),
       '',
@@ -138,24 +119,25 @@ class LocalTesseractProvider implements OcrProvider {
     // Normalize non-breaking spaces.
     value = value.replaceAll('\u00A0', ' ');
 
-    // Remove excessive spaces around line breaks.
+    // Remove trailing spaces from lines.
     value = value.replaceAll(
       RegExp(r'[ \t]+\n'),
       '\n',
     );
 
+    // Remove leading spaces from lines.
     value = value.replaceAll(
       RegExp(r'\n[ \t]+'),
       '\n',
     );
 
-    // Collapse excessive blank lines while preserving paragraph structure.
+    // Avoid excessive blank lines.
     value = value.replaceAll(
       RegExp(r'\n{3,}'),
       '\n\n',
     );
 
-    // Collapse repeated horizontal spaces.
+    // Avoid excessive horizontal spaces.
     value = value.replaceAll(
       RegExp(r'[ \t]{2,}'),
       ' ',
@@ -163,65 +145,33 @@ class LocalTesseractProvider implements OcrProvider {
 
     return value.trim();
   }
-
-  /// Tesseract's Dart plugin does not always expose a reliable confidence
-  /// value through the simple extractText API, therefore this provides a
-  /// conservative text-quality estimate for the existing OcrResult model.
-  double _estimateConfidence(
-    String text, {
-    required String language,
-  }) {
-    if (text.trim().isEmpty) {
-      return 0.0;
-    }
-
-    final score = _score(text);
-
-    // Convert our quality score to a stable 0..1 range.
-    final normalized = (score / 1000.0).clamp(0.0, 1.0);
-
-    // Keep a sensible floor for readable OCR rather than claiming
-    // artificially high confidence.
-    return normalized.clamp(0.35, 0.95);
-  }
 }
 
-/// Supported Tesseract language/model identifiers.
+/// Supported OCR languages.
 ///
-/// "urd" remains the public application language code.
-///
-/// Internally:
-///   urd -> urd_naw
-///
-/// This allows the rest of the application to continue using "urd"
-/// without needing to know about the specialized model filename.
+/// The user-facing Urdu code remains `urd`.
+/// LocalTesseractProvider internally maps it to `urd_naw`.
 const kSupportedOcrLanguages = <String, String>{
   'eng': 'English',
-
-  // Urdu uses urd_naw internally.
   'urd': 'اردو (Urdu)',
-
   'ara': 'العربية (Arabic)',
   'hin': 'हिन्दी (Hindi)',
 };
 
-/// Called with a short, user-facing label whenever OCR moves to a new stage.
 typedef OcrProgressCallback = void Function(String stage);
 
-/// Auto-detection language passes.
+/// Auto-detection languages.
 ///
-/// IMPORTANT:
-/// Urdu Nastaliq is tested separately from Arabic.
+/// Urdu and Arabic are intentionally run separately.
 ///
-/// We intentionally DO NOT use:
-///   urd+ara
+/// We DO NOT use:
+///     urd+ara
 ///
-/// because combining Urdu and Arabic dictionaries/models in one pass can
-/// make Urdu Nastaliq recognition worse.
+/// because Urdu Nastaliq and Arabic recognition behave differently.
 const _kAutoDetectLanguages = <String, String>{
   'eng': 'Reading English text…',
 
-  // Primary Urdu Nastaliq model.
+  // Specialized Urdu Nastaliq model.
   'urd_naw': 'Reading Urdu Nastaliq text…',
 
   // Official high-accuracy Urdu fallback.
@@ -238,22 +188,13 @@ class OcrService {
 
   Future<void> init() async {}
 
-  /// Performs local OCR.
+  /// Main OCR pipeline.
   ///
-  /// Pipeline:
-  ///
-  /// 1. Prepare / preprocess image.
-  /// 2. Run each supported language independently.
-  /// 3. Give Urdu Nastaliq its own dedicated pass.
-  /// 4. Compare OCR quality.
+  /// 1. Preprocess image.
+  /// 2. Run each language separately.
+  /// 3. Give Urdu Nastaliq a dedicated pass.
+  /// 4. Score each result.
   /// 5. Return the strongest result.
-  ///
-  /// Urdu strategy:
-  ///
-  ///     urd_naw  -> primary
-  ///     urd      -> fallback
-  ///
-  /// This prevents Arabic OCR from stealing Urdu results.
   Future<OcrResult> recognize(
     String path, {
     OcrProgressCallback? onProgress,
@@ -265,7 +206,7 @@ class OcrService {
     try {
       preparedPath = await _preprocessor.prepare(path);
     } catch (_) {
-      // If preprocessing fails, OCR the original image.
+      // If preprocessing fails, continue with original image.
       preparedPath = path;
     }
 
@@ -291,7 +232,7 @@ class OcrService {
           best = result;
         }
       } catch (_) {
-        // One failed language should not stop the complete OCR process.
+        // A failure in one language must not stop other OCR passes.
         continue;
       }
     }
@@ -307,12 +248,11 @@ class OcrService {
     return best;
   }
 
-  /// Scores OCR output based on script-aware text quality.
+  /// Script-aware OCR quality scoring.
   ///
-  /// This is intentionally different from simply counting all Unicode
-  /// letters. Urdu and Arabic share the Arabic Unicode block, so we add
-  /// Urdu-specific characters and common Nastaliq/Urdu letters where
-  /// possible.
+  /// Urdu and Arabic both use the Arabic Unicode ranges, so simply
+  /// counting Arabic-script characters is not enough. Urdu-specific
+  /// characters receive additional weight.
   int _score(
     String text, {
     String? language,
@@ -343,7 +283,7 @@ class OcrService {
       r'[\u0900-\u097F]',
     ).allMatches(cleaned).length;
 
-    // Common Urdu-specific letters.
+    // Common Urdu-specific characters.
     final urduSpecificLetters = RegExp(
       r'[ٹڈڑںھہءےؤئۃ]',
     ).allMatches(cleaned).length;
@@ -369,7 +309,8 @@ class OcrService {
 
       case 'urd':
       case 'urd_naw':
-        scriptLetters = arabicScriptLetters + urduSpecificLetters;
+        scriptLetters =
+            arabicScriptLetters + urduSpecificLetters;
         break;
 
       case 'ara':
@@ -386,21 +327,23 @@ class OcrService {
     final meaningfulCharacters =
         scriptLetters + digits + punctuation;
 
-    final ratio = meaningfulCharacters / totalNonSpace;
+    final ratio =
+        meaningfulCharacters / totalNonSpace;
 
     int score = (ratio * 1000).round();
 
     // Reward longer readable text.
     score += scriptLetters * 3;
 
-    // Strong bonus for Urdu-specific characters.
+    // Strongly reward Urdu-specific characters for Urdu passes.
     if (language == 'urd' || language == 'urd_naw') {
       score += urduSpecificLetters * 12;
     }
 
-    // Slight preference for the specialized Urdu model when both
-    // Urdu models produce similarly good text.
-    if (language == 'urd_naw' && urduSpecificLetters > 0) {
+    // Give the specialized Nastaliq model a small advantage when
+    // it actually produces Urdu-specific characters.
+    if (language == 'urd_naw' &&
+        urduSpecificLetters > 0) {
       score += 80;
     }
 
