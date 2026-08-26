@@ -118,10 +118,13 @@ class _HomeScreenState extends State<HomeScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.history_rounded),
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => HistoryScreen(history: widget.history)),
-            ),
+            onPressed: () async {
+              await Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => HistoryScreen(history: widget.history)),
+              );
+              if (mounted) setState(() {});
+            },
           ),
           IconButton(
             icon: const Icon(Icons.settings_outlined),
@@ -172,10 +175,13 @@ class _HomeScreenState extends State<HomeScreen> {
                         children: [
                           Text('Recent scans', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800)),
                           TextButton(
-                            onPressed: () => Navigator.push(
-                              context,
-                              MaterialPageRoute(builder: (_) => HistoryScreen(history: widget.history)),
-                            ),
+                            onPressed: () async {
+                              await Navigator.push(
+                                context,
+                                MaterialPageRoute(builder: (_) => HistoryScreen(history: widget.history)),
+                              );
+                              if (mounted) setState(() {});
+                            },
                             child: const Text('View all'),
                           ),
                         ],
