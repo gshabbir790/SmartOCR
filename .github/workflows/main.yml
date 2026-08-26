@@ -67,17 +67,15 @@ jobs:
           fi
 
       - name: Build Release APK
-        run: flutter build apk --release --split-per-abi --android-skip-build-dependency-validation
+        run: flutter build apk --release --android-skip-build-dependency-validation
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: release-apk
-          # Only the arm64-v8a build is uploaded — this covers virtually
-          # every Android phone sold since ~2017. The armeabi-v7a and
-          # x86_64 splits are still produced locally by the build step
-          # above (in build/app/outputs/flutter-apk/) in case you ever
-          # need to support an older 32-bit device, but skipping them
-          # here keeps the download you actually get down to one small
-          # APK instead of three bundled together.
-          path: build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
+          # A single universal APK containing every architecture
+          # (armeabi-v7a, arm64-v8a, x86_64), so it installs on any
+          # Android device regardless of processor type. This is larger
+          # than a single-architecture split APK, but guarantees it
+          # will actually install on your phone.
+          path: build/app/outputs/flutter-apk/app-release.apk
