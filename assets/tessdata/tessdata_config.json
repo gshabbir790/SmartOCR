@@ -1,6 +1,7 @@
 {
   "files": [
     "eng.traineddata",
+    "urd_naw.traineddata",
     "urd.traineddata",
     "ara.traineddata",
     "hin.traineddata"
