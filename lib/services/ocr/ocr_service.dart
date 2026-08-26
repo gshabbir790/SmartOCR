@@ -10,12 +10,11 @@ abstract interface class OcrProvider {
 
 class LocalTesseractProvider implements OcrProvider {
   @override
-  Future<OcrResult> recognize(String path, {String language = kAutoDetectLanguage}) async {
-    // یہاں بریکٹس { } شامل کیے گئے ہیں
+  Future<OcrResult> recognize(String path, {String language = 'eng'}) async {
     if (!await File(path).exists()) {
       throw const FileSystemException('Image not found');
     }
-    
+
     final config = OCRConfig(
       language: language,
       engine: OCREngine.tesseract,
@@ -27,10 +26,10 @@ class LocalTesseractProvider implements OcrProvider {
     final cleaned = text.trim();
     final confidence = cleaned.isEmpty ? 0.0 : 0.82;
     return OcrResult(
-      text: cleaned, 
-      language: language, 
-      confidence: confidence, 
-      blocks: cleaned.isEmpty ? [] : [OcrBlock(text: cleaned, confidence: confidence)]
+      text: cleaned,
+      language: language,
+      confidence: confidence,
+      blocks: cleaned.isEmpty ? [] : [OcrBlock(text: cleaned, confidence: confidence)],
     );
   }
 }
@@ -44,20 +43,36 @@ const kSupportedOcrLanguages = <String, String>{
   'hin': 'हिन्दी (Hindi)',
 };
 
-/// Tesseract has no single "detect the language" call, but it can load
-/// several language models for one recognition pass and pick whichever
-/// characters score best per line. Combining every bundled language here
-/// is what gives users the "auto" behaviour: no manual picker needed.
-const kAutoDetectLanguage = 'eng+urd+ara+hin';
+/// Called with a short, user-facing label whenever OCR moves to a new stage,
+/// so the UI can show real progress instead of a generic spinner.
+typedef OcrProgressCallback = void Function(String stage);
+
+/// Auto-detect works by running Tesseract once per *script family* rather
+/// than loading every language into one pass. Merging eng+urd+ara+hin into
+/// a single Tesseract call (the previous approach) made it pick characters
+/// from whichever language's dictionary scored a fragment best line-by-line,
+/// which badly garbled Urdu/Arabic's connected Nastaliq script in
+/// particular — English still looked fine because Latin text is far less
+/// sensitive to this. Keeping script-compatible languages together (Urdu
+/// and Arabic share the same Arabic script) and scoring each attempt's
+/// output afterwards gives much cleaner results per language.
+const _kAutoDetectGroups = <String, String>{
+  'eng': 'Reading English text…',
+  'urd+ara': 'Reading Urdu / Arabic text…',
+  'hin': 'Reading Hindi text…',
+};
 
 class OcrService {
   final OcrProvider local = LocalTesseractProvider();
   final ImagePreprocessor _preprocessor = ImagePreprocessor();
   Future<void> init() async {}
 
-  /// Preprocesses [path] (deskew/resize/contrast) before running Tesseract,
-  /// which measurably improves accuracy on phone-camera photos.
-  Future<OcrResult> recognize(String path, {String language = kAutoDetectLanguage}) async {
+  /// Preprocesses [path] (deskew/resize/contrast), then runs Tesseract once
+  /// per script group and keeps whichever result actually looks like real
+  /// text — this is what gives users "auto-detect" without a language
+  /// picker, and without eng+urd+ara+hin scrambling each other.
+  Future<OcrResult> recognize(String path, {OcrProgressCallback? onProgress}) async {
+    onProgress?.call('Preparing image…');
     String preparedPath = path;
     try {
       preparedPath = await _preprocessor.prepare(path);
@@ -65,13 +80,36 @@ class OcrService {
       // Fall back to the original image if preprocessing fails for any reason.
       preparedPath = path;
     }
-    final result = await local.recognize(preparedPath, language: language);
-    
-    // یہاں بھی بریکٹس { } شامل کیے گئے ہیں
-    if (result.text.isEmpty) {
+
+    OcrResult? best;
+    int bestScore = -1;
+    for (final entry in _kAutoDetectGroups.entries) {
+      onProgress?.call(entry.value);
+      final result = await local.recognize(preparedPath, language: entry.key);
+      final score = _score(result.text);
+      if (score > bestScore) {
+        bestScore = score;
+        best = result;
+      }
+    }
+
+    onProgress?.call('Finalizing…');
+    if (best == null || best.text.isEmpty) {
       throw const FormatException('No readable text found.');
     }
-    
-    return result;
+    return best;
+  }
+
+  /// Rewards text that is mostly real letters (Latin, Arabic/Urdu, or
+  /// Devanagari) over noise/garbage, so the best-scoring script group wins.
+  int _score(String text) {
+    final cleaned = text.trim();
+    if (cleaned.isEmpty) return -1;
+    final letters = RegExp(r'[A-Za-z\u0600-\u06FF\u0750-\u077F\u0900-\u097F]');
+    final letterCount = letters.allMatches(cleaned).length;
+    final totalNonSpace = cleaned.replaceAll(RegExp(r'\s'), '').length;
+    if (totalNonSpace == 0) return -1;
+    final ratio = letterCount / totalNonSpace;
+    return (ratio * 1000).round() + letterCount;
   }
 }
