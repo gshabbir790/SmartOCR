@@ -1,26 +1,17 @@
-Place Tesseract traineddata files here:
+Tesseract traineddata files used by Smart OCR:
+
 eng.traineddata
-urd.traineddata
+urd_naw.traineddata   <- primary Urdu Nastaliq model
+urd.traineddata      <- official high-accuracy Urdu fallback
 ara.traineddata
 hin.traineddata
 
-These binary model files are intentionally not committed to the repo
-(they are ~1-15MB each). The GitHub Actions workflow downloads them
-automatically before every build (see .github/workflows/main.yml,
-step "Download Tesseract trained data"), so APKs built via CI always
-include real OCR data.
+The binary models are intentionally not committed to the repository. GitHub
+Actions downloads them automatically before every release build.
 
-If you build locally (flutter build apk / flutter run) instead of
-via CI, you must download these 4 files yourself first, e.g.:
+The specialised `urd_naw` model is a user-contributed Tesseract model trained
+for Urdu Nastaliq and is the primary Urdu OCR model in this app. The official
+`tessdata_best` Urdu model is retained as a fallback for non-Nastaliq Urdu.
 
-  cd assets/tessdata
-  for lang in eng urd ara hin; do
-    curl -fL -o "$lang.traineddata" \
-      "https://github.com/tesseract-ocr/tessdata_fast/raw/main/$lang.traineddata"
-  done
-
-Without these files present, Tesseract cannot recognize any text and
-every scan will fail with "Could not process this image."
-
-NOTE: the config file the plugin actually reads is assets/tessdata_config.json
-(one directory up from this folder) — NOT a file inside assets/tessdata/.
+The plugin reads `assets/tessdata_config.json` to determine which models are
+available. Do not remove `urd_naw.traineddata` from that configuration.
