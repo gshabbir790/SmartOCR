@@ -1,1 +1,14 @@
-
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Native Android splash screen shown instantly on cold start, before the
+    Flutter engine has attached and drawn a single frame. Solid brand color
+    with the app mark centered on top, matching the in-app theme.
+-->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@color/splash_background"/>
+    <item android:gravity="center">
+        <bitmap
+            android:src="@mipmap/ic_launcher_foreground"
+            android:gravity="center"/>
+    </item>
+</layer-list>
