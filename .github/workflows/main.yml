@@ -73,4 +73,11 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: release-apk
-          path: build/app/outputs/flutter-apk/*.apk
+          # Only the arm64-v8a build is uploaded — this covers virtually
+          # every Android phone sold since ~2017. The armeabi-v7a and
+          # x86_64 splits are still produced locally by the build step
+          # above (in build/app/outputs/flutter-apk/) in case you ever
+          # need to support an older 32-bit device, but skipping them
+          # here keeps the download you actually get down to one small
+          # APK instead of three bundled together.
+          path: build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
