@@ -1,7 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 import '../../data/models/ocr_models.dart';
 import '../../services/ocr/ocr_service.dart';
@@ -11,8 +10,6 @@ import '../ocr/ocr_result_screen.dart';
 import '../scanner/camera_screen.dart';
 import '../history/history_screen.dart';
 import '../settings/settings_screen.dart';
-
-const _kOcrLanguagePrefKey = 'ocr_language';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({
@@ -34,27 +31,11 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   bool _busy = false;
-  String _language = 'eng';
 
   @override
   void initState() {
     super.initState();
     widget.share.images.listen(_handleSharedImages);
-    _loadLanguage();
-  }
-
-  Future<void> _loadLanguage() async {
-    final prefs = await SharedPreferences.getInstance();
-    final saved = prefs.getString(_kOcrLanguagePrefKey);
-    if (saved != null && kSupportedOcrLanguages.containsKey(saved) && mounted) {
-      setState(() => _language = saved);
-    }
-  }
-
-  Future<void> _setLanguage(String lang) async {
-    setState(() => _language = lang);
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_kOcrLanguagePrefKey, lang);
   }
 
   Future<void> _handleSharedImages(List<String> paths) async {
@@ -76,7 +57,7 @@ class _HomeScreenState extends State<HomeScreen> {
     try {
       for (final path in paths) {
         firstPath ??= path;
-        final result = await widget.ocr.recognize(path, language: _language);
+        final result = await widget.ocr.recognize(path, language: kAutoDetectLanguage);
         texts.add(result.text);
       }
       final combined = texts
@@ -159,76 +140,45 @@ class _HomeScreenState extends State<HomeScreen> {
             const SizedBox(height: 16),
             Row(
               children: [
-                const Icon(Icons.translate_rounded, size: 20),
+                Icon(Icons.translate_rounded, size: 18, color: Theme.of(context).colorScheme.primary),
                 const SizedBox(width: 8),
-                const Text('OCR language', style: TextStyle(fontWeight: FontWeight.w700)),
-                const Spacer(),
-                DropdownButton<String>(
-                  value: _language,
-                  items: kSupportedOcrLanguages.entries
-                      .map((e) => DropdownMenuItem(value: e.key, child: Text(e.value)))
-                      .toList(),
-                  onChanged: (v) {
-                    if (v != null) _setLanguage(v);
-                  },
+                Text(
+                  'Language is detected automatically',
+                  style: TextStyle(fontWeight: FontWeight.w600, color: Theme.of(context).colorScheme.onSurfaceVariant),
                 ),
               ],
             ),
             const SizedBox(height: 22),
-            Row(
-              children: [
-                Expanded(
-                  child: _ActionCard(
-                    icon: Icons.camera_alt_rounded,
-                    title: 'Scan with Camera',
-                    subtitle: 'Capture a document',
-                    onTap: () async {
-                      final path = await Navigator.push<String?>(
-                        context,
-                        MaterialPageRoute(builder: (_) => const CameraScreen()),
-                      );
-                      if (path != null) await _process([path]);
-                    },
-                  ),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: _ActionCard(
-                    icon: Icons.photo_library_rounded,
-                    title: 'Gallery',
-                    subtitle: 'Choose one or more',
-                    onTap: _gallery,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 22),
-            
-            // Re-formatted to fix missing parenthesis/identifier issue
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.primaryContainer,
-                borderRadius: BorderRadius.circular(26),
-              ),
+            IntrinsicHeight(
               child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Icon(Icons.ios_share_rounded, size: 30, color: Theme.of(context).colorScheme.primary),
+                  Expanded(
+                    child: _ActionCard(
+                      icon: Icons.camera_alt_rounded,
+                      title: 'Scan with Camera',
+                      subtitle: 'Capture a document',
+                      onTap: () async {
+                        final path = await Navigator.push<String?>(
+                          context,
+                          MaterialPageRoute(builder: (_) => const CameraScreen()),
+                        );
+                        if (path != null) await _process([path]);
+                      },
+                    ),
+                  ),
                   const SizedBox(width: 14),
-                  const Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Share directly to Smart OCR', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
-                        SizedBox(height: 5),
-                        Text('From Gallery or Photos, tap Share → Smart OCR. OCR starts automatically.', style: TextStyle(height: 1.35)),
-                      ],
+                  Expanded(
+                    child: _ActionCard(
+                      icon: Icons.photo_library_rounded,
+                      title: 'Gallery',
+                      subtitle: 'Choose one or more',
+                      onTap: _gallery,
                     ),
                   ),
                 ],
               ),
             ),
-            
             const SizedBox(height: 28),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
