@@ -20,6 +20,7 @@ class LocalTesseractProvider implements OcrProvider {
       engine: OCREngine.tesseract,
       options: const {
         TesseractConfig.preserveInterwordSpaces: '1',
+        TesseractConfig.pageSegMode: PageSegmentationMode.autoOsd,
       },
     );
     final text = await TesseractOcr.extractText(path, config: config);
