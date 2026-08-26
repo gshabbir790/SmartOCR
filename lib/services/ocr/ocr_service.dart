@@ -1,6 +1,8 @@
 import 'dart:io';
-import 'package:tesseract_ocr/tesseract_ocr.dart';
+
 import 'package:tesseract_ocr/ocr_engine_config.dart';
+import 'package:tesseract_ocr/tesseract_ocr.dart';
+
 import '../../data/models/ocr_models.dart';
 import '../image/image_preprocessor.dart';
 
@@ -15,28 +17,46 @@ class LocalTesseractProvider implements OcrProvider {
       throw const FileSystemException('Image not found');
     }
 
+    // Urdu/Nastaliq is particularly sensitive to page segmentation. A single
+    // block works better for normal documents, while sparse mode is safer for
+    // mixed layouts. Keep Urdu isolated instead of combining it with Arabic.
+    final pageMode = language == 'urd' ? '6' : '3';
     final config = OCRConfig(
       language: language,
       engine: OCREngine.tesseract,
-      options: const {
+      options: {
         TesseractConfig.preserveInterwordSpaces: '1',
-        TesseractConfig.pageSegMode: PageSegmentationMode.autoOsd,
+        'tessedit_pageseg_mode': pageMode,
       },
     );
+
     final text = await TesseractOcr.extractText(path, config: config);
-    final cleaned = text.trim();
+    final cleaned = _cleanText(text);
     final confidence = cleaned.isEmpty ? 0.0 : 0.82;
+
     return OcrResult(
       text: cleaned,
       language: language,
       confidence: confidence,
-      blocks: cleaned.isEmpty ? [] : [OcrBlock(text: cleaned, confidence: confidence)],
+      blocks: cleaned.isEmpty
+          ? []
+          : [OcrBlock(text: cleaned, confidence: confidence)],
     );
+  }
+
+  String _cleanText(String value) {
+    // Remove invisible bidi/control characters that can make otherwise valid
+    // Urdu appear scrambled when copied between apps.
+    return value
+        .replaceAll('\u0000', '')
+        .replaceAll('\u000B', '')
+        .replaceAll('\u000C', '')
+        .replaceAll(RegExp(r'[\u200E\u200F\u202A-\u202E\u2066-\u2069]'), '')
+        .replaceAll(RegExp(r'[ \t]+\n'), '\n')
+        .trim();
   }
 }
 
-/// Supported Tesseract language codes, driven by the traineddata files
-/// shipped in assets/tessdata/ (see that folder's README).
 const kSupportedOcrLanguages = <String, String>{
   'eng': 'English',
   'urd': 'اردو (Urdu)',
@@ -44,20 +64,11 @@ const kSupportedOcrLanguages = <String, String>{
   'hin': 'हिन्दी (Hindi)',
 };
 
-/// Called with a short, user-facing label whenever OCR moves to a new stage,
-/// so the UI can show real progress instead of a generic spinner.
 typedef OcrProgressCallback = void Function(String stage);
 
-/// Auto-detect works by running Tesseract once per language, completely
-/// separately, and scoring each attempt's output afterwards. An earlier
-/// version combined Urdu and Arabic into one "urd+ara" pass on the
-/// (reasonable-sounding) theory that same-script languages are safe to
-/// merge — but Urdu's Nastaliq shaping is different enough from Arabic's
-/// Naskh-style shaping that mixing their dictionaries made Urdu *worse*,
-/// not better. Every language now gets its own fully isolated pass.
 const _kAutoDetectLanguages = <String, String>{
-  'eng': 'Reading English text…',
   'urd': 'Reading Urdu text…',
+  'eng': 'Reading English text…',
   'ara': 'Reading Arabic text…',
   'hin': 'Reading Hindi text…',
 };
@@ -65,28 +76,29 @@ const _kAutoDetectLanguages = <String, String>{
 class OcrService {
   final OcrProvider local = LocalTesseractProvider();
   final ImagePreprocessor _preprocessor = ImagePreprocessor();
+
   Future<void> init() async {}
 
-  /// Preprocesses [path] (deskew/resize/contrast), then runs Tesseract once
-  /// per script group and keeps whichever result actually looks like real
-  /// text — this is what gives users "auto-detect" without a language
-  /// picker, and without eng+urd+ara+hin scrambling each other.
-  Future<OcrResult> recognize(String path, {OcrProgressCallback? onProgress}) async {
+  Future<OcrResult> recognize(
+    String path, {
+    OcrProgressCallback? onProgress,
+  }) async {
     onProgress?.call('Preparing image…');
     String preparedPath = path;
+
     try {
       preparedPath = await _preprocessor.prepare(path);
     } catch (_) {
-      // Fall back to the original image if preprocessing fails for any reason.
       preparedPath = path;
     }
 
     OcrResult? best;
     int bestScore = -1;
+
     for (final entry in _kAutoDetectLanguages.entries) {
       onProgress?.call(entry.value);
       final result = await local.recognize(preparedPath, language: entry.key);
-      final score = _score(result.text);
+      final score = _score(result.text, entry.key);
       if (score > bestScore) {
         bestScore = score;
         best = result;
@@ -100,16 +112,27 @@ class OcrService {
     return best;
   }
 
-  /// Rewards text that is mostly real letters (Latin, Arabic/Urdu, or
-  /// Devanagari) over noise/garbage, so the best-scoring script group wins.
-  int _score(String text) {
+  int _score(String text, String language) {
     final cleaned = text.trim();
     if (cleaned.isEmpty) return -1;
-    final letters = RegExp(r'[A-Za-z\u0600-\u06FF\u0750-\u077F\u0900-\u097F]');
-    final letterCount = letters.allMatches(cleaned).length;
-    final totalNonSpace = cleaned.replaceAll(RegExp(r'\s'), '').length;
-    if (totalNonSpace == 0) return -1;
-    final ratio = letterCount / totalNonSpace;
-    return (ratio * 1000).round() + letterCount;
+
+    final total = cleaned.replaceAll(RegExp(r'\s'), '').length;
+    if (total == 0) return -1;
+
+    final script = switch (language) {
+      'urd' || 'ara' => RegExp(r'[\u0600-\u06FF\u0750-\u077F]'),
+      'hin' => RegExp(r'[\u0900-\u097F]'),
+      _ => RegExp(r'[A-Za-z]'),
+    };
+
+    final scriptCount = script.allMatches(cleaned).length;
+    final ratio = scriptCount / total;
+    final words = cleaned.split(RegExp(r'\s+')).where((w) => w.isNotEmpty).length;
+
+    // A language gets a strong bonus when its own script dominates. This
+    // prevents Arabic/Urdu or Latin garbage from winning only because it has
+    // a high generic "letter" ratio.
+    final scriptBonus = ratio >= 0.55 ? 500 : ratio >= 0.30 ? 150 : 0;
+    return (ratio * 1000).round() + scriptCount + (words * 2) + scriptBonus;
   }
 }
