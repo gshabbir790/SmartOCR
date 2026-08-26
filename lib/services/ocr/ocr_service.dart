@@ -1,202 +1,407 @@
 import 'dart:io';
-import 'package:tesseract_ocr/tesseract_ocr.dart';
+
 import 'package:tesseract_ocr/ocr_engine_config.dart';
+import 'package:tesseract_ocr/tesseract_ocr.dart';
+
 import '../../data/models/ocr_models.dart';
 import '../image/image_preprocessor.dart';
 
+/// Common OCR provider interface.
 abstract interface class OcrProvider {
-  Future<OcrResult> recognize(String path, {String language = 'eng'});
+  Future<OcrResult> recognize(
+    String path, {
+    String language = 'eng',
+  });
 }
 
-/// Local/offline Tesseract provider.
+/// Local Tesseract OCR implementation.
 ///
-/// `urd_naw` is a community-contributed Urdu model specifically trained for
-/// Urdu Nastaliq. The normal `urd` model is kept as a fallback. Tesseract's
-/// official `tessdata_best` models are more accurate than `tessdata_fast`, but
-/// `urd_naw` is the better fit for Pakistani/Urdu Nastaliq text.
+/// Important:
+/// - "urd" is mapped to "urd_naw" for better Urdu Nastaliq recognition.
+/// - "urd_naw" is the primary Urdu model.
+/// - "urd" remains available as a high-accuracy fallback model.
+///
+/// Required traineddata files:
+///   assets/tessdata/eng.traineddata
+///   assets/tessdata/urd_naw.traineddata
+///   assets/tessdata/urd.traineddata
+///   assets/tessdata/ara.traineddata
+///   assets/tessdata/hin.traineddata
 class LocalTesseractProvider implements OcrProvider {
+  /// Maps the app's user-facing language code to the actual
+  /// Tesseract traineddata model.
+  String _resolveLanguage(String language) {
+    switch (language.toLowerCase().trim()) {
+      case 'urdu':
+      case 'ur':
+      case 'urd':
+        // Primary Urdu Nastaliq model.
+        return 'urd_naw';
+
+      case 'english':
+      case 'en':
+      case 'eng':
+        return 'eng';
+
+      case 'arabic':
+      case 'ar':
+      case 'ara':
+        return 'ara';
+
+      case 'hindi':
+      case 'hi':
+      case 'hin':
+        return 'hin';
+
+      case 'urd_naw':
+        return 'urd_naw';
+
+      default:
+        return language;
+    }
+  }
+
   @override
-  Future<OcrResult> recognize(String path, {String language = 'eng'}) async {
-    if (!await File(path).exists()) {
+  Future<OcrResult> recognize(
+    String path, {
+    String language = 'eng',
+  }) async {
+    final file = File(path);
+
+    if (!await file.exists()) {
       throw const FileSystemException('Image not found');
     }
 
-    final isUrdu = language == 'urd_naw' || language == 'urd';
+    final resolvedLanguage = _resolveLanguage(language);
+
     final config = OCRConfig(
-      language: language,
+      language: resolvedLanguage,
       engine: OCREngine.tesseract,
       options: {
         TesseractConfig.preserveInterwordSpaces: '1',
-        // Do not use OSD for Urdu Nastaliq. OSD can misclassify the script and
-        // is unnecessary when the language model is explicitly selected.
-        TesseractConfig.pageSegMode:
-            isUrdu ? PageSegmentationMode.auto : PageSegmentationMode.auto,
-        if (isUrdu) 'load_system_dawg': '1',
-        if (isUrdu) 'load_freq_dawg': '1',
+
+        // auto is more predictable for normal document/poster OCR.
+        // autoOsd can incorrectly detect Urdu/Nastaliq orientation/script.
+        TesseractConfig.pageSegMode: PageSegmentationMode.auto,
       },
     );
 
-    final text = await TesseractOcr.extractText(path, config: config);
-    final cleaned = _cleanOcrText(text);
-    final confidence = _estimateConfidence(cleaned, language);
+    final text = await TesseractOcr.extractText(
+      path,
+      config: config,
+    );
+
+    final cleaned = _cleanOcrText(
+      text,
+      language: resolvedLanguage,
+    );
+
+    final confidence = _estimateConfidence(
+      cleaned,
+      language: resolvedLanguage,
+    );
 
     return OcrResult(
       text: cleaned,
-      language: language,
+      language: resolvedLanguage,
       confidence: confidence,
       blocks: cleaned.isEmpty
           ? []
-          : [OcrBlock(text: cleaned, confidence: confidence)],
+          : [
+              OcrBlock(
+                text: cleaned,
+                confidence: confidence,
+              ),
+            ],
     );
   }
 
-  String _cleanOcrText(String input) {
-    // Keep logical character order intact. Flutter's RTL text engine should
-    // handle visual ordering; reversing an Urdu string here would corrupt it.
-    var text = input
-        .replaceAll('\r\n', '\n')
-        .replaceAll('\r', '\n')
-        .replaceAll(RegExp(r'[\u200B\u200C\u200D\u200E\u200F\u202A-\u202E\u2066-\u2069]'), '')
-        .replaceAll(RegExp(r'[ \t]+'), ' ')
-        .replaceAll(RegExp(r'\n{3,}'), '\n\n')
-        .trim();
+  /// Removes OCR artefacts without reversing Urdu/Arabic text.
+  ///
+  /// IMPORTANT:
+  /// We deliberately do NOT reverse RTL text here.
+  /// Urdu/Arabic are Unicode bidirectional scripts and reversing the
+  /// characters manually can corrupt their natural character order.
+  String _cleanOcrText(
+    String text, {
+    required String language,
+  }) {
+    var value = text;
 
-    // Tesseract can leave a space immediately before punctuation. This is
-    // especially noticeable in Urdu Nastaliq output.
-    text = text.replaceAll(RegExp(r'\s+([،۔,:;!?])'), r'\1');
-    return text;
+    // Remove common invisible bidi control characters that can be
+    // accidentally returned by OCR or introduced during processing.
+    value = value.replaceAll(
+      RegExp(r'[\u061C\u200E\u200F\u202A-\u202E\u2066-\u2069]'),
+      '',
+    );
+
+    // Normalize non-breaking spaces.
+    value = value.replaceAll('\u00A0', ' ');
+
+    // Remove excessive spaces around line breaks.
+    value = value.replaceAll(
+      RegExp(r'[ \t]+\n'),
+      '\n',
+    );
+
+    value = value.replaceAll(
+      RegExp(r'\n[ \t]+'),
+      '\n',
+    );
+
+    // Collapse excessive blank lines while preserving paragraph structure.
+    value = value.replaceAll(
+      RegExp(r'\n{3,}'),
+      '\n\n',
+    );
+
+    // Collapse repeated horizontal spaces.
+    value = value.replaceAll(
+      RegExp(r'[ \t]{2,}'),
+      ' ',
+    );
+
+    return value.trim();
   }
 
-  double _estimateConfidence(String text, String language) {
-    if (text.isEmpty) return 0;
-    final compact = text.replaceAll(RegExp(r'\s'), '');
-    if (compact.isEmpty) return 0;
+  /// Tesseract's Dart plugin does not always expose a reliable confidence
+  /// value through the simple extractText API, therefore this provides a
+  /// conservative text-quality estimate for the existing OcrResult model.
+  double _estimateConfidence(
+    String text, {
+    required String language,
+  }) {
+    if (text.trim().isEmpty) {
+      return 0.0;
+    }
 
-    final script = language == 'urd_naw' || language == 'urd'
-        ? RegExp(r'[\u0600-\u06FF\u0750-\u077F]')
-        : language == 'hin'
-            ? RegExp(r'[\u0900-\u097F]')
-            : RegExp(r'[A-Za-z]');
-    final ratio = script.allMatches(compact).length / compact.length;
-    return (0.72 + (ratio * 0.23)).clamp(0.0, 0.95);
+    final score = _score(text);
+
+    // Convert our quality score to a stable 0..1 range.
+    final normalized = (score / 1000.0).clamp(0.0, 1.0);
+
+    // Keep a sensible floor for readable OCR rather than claiming
+    // artificially high confidence.
+    return normalized.clamp(0.35, 0.95);
   }
 }
 
-/// Language packs expected in assets/tessdata/.
+/// Supported Tesseract language/model identifiers.
+///
+/// "urd" remains the public application language code.
+///
+/// Internally:
+///   urd -> urd_naw
+///
+/// This allows the rest of the application to continue using "urd"
+/// without needing to know about the specialized model filename.
 const kSupportedOcrLanguages = <String, String>{
   'eng': 'English',
-  'urd_naw': 'اردو — Nastaliq',
-  'urd': 'اردو — fallback',
+
+  // Urdu uses urd_naw internally.
+  'urd': 'اردو (Urdu)',
+
   'ara': 'العربية (Arabic)',
   'hin': 'हिन्दी (Hindi)',
 };
 
+/// Called with a short, user-facing label whenever OCR moves to a new stage.
 typedef OcrProgressCallback = void Function(String stage);
 
-/// Auto-detection intentionally gives Urdu Nastaliq a dedicated pass instead
-/// of merging it with Arabic. The old `urd+ara` approach can confuse the
-/// different orthography/dictionaries, while the dedicated `urd_naw` model is
-/// designed for Urdu Nastaliq.
+/// Auto-detection language passes.
+///
+/// IMPORTANT:
+/// Urdu Nastaliq is tested separately from Arabic.
+///
+/// We intentionally DO NOT use:
+///   urd+ara
+///
+/// because combining Urdu and Arabic dictionaries/models in one pass can
+/// make Urdu Nastaliq recognition worse.
 const _kAutoDetectLanguages = <String, String>{
   'eng': 'Reading English text…',
-  'urd_naw': 'Reading Urdu Nastaliq…',
+
+  // Primary Urdu Nastaliq model.
+  'urd_naw': 'Reading Urdu Nastaliq text…',
+
+  // Official high-accuracy Urdu fallback.
+  'urd': 'Checking Urdu text…',
+
   'ara': 'Reading Arabic text…',
   'hin': 'Reading Hindi text…',
 };
 
 class OcrService {
   final OcrProvider local = LocalTesseractProvider();
+
   final ImagePreprocessor _preprocessor = ImagePreprocessor();
+
   Future<void> init() async {}
 
+  /// Performs local OCR.
+  ///
+  /// Pipeline:
+  ///
+  /// 1. Prepare / preprocess image.
+  /// 2. Run each supported language independently.
+  /// 3. Give Urdu Nastaliq its own dedicated pass.
+  /// 4. Compare OCR quality.
+  /// 5. Return the strongest result.
+  ///
+  /// Urdu strategy:
+  ///
+  ///     urd_naw  -> primary
+  ///     urd      -> fallback
+  ///
+  /// This prevents Arabic OCR from stealing Urdu results.
   Future<OcrResult> recognize(
     String path, {
     OcrProgressCallback? onProgress,
   }) async {
     onProgress?.call('Preparing image…');
 
-    // For Nastaliq, preserving the original grayscale information is often
-    // safer than aggressive thresholding. The preprocessor creates a clean,
-    // enlarged copy while retaining thin dots/diacritics.
     String preparedPath = path;
+
     try {
       preparedPath = await _preprocessor.prepare(path);
     } catch (_) {
+      // If preprocessing fails, OCR the original image.
       preparedPath = path;
     }
 
     OcrResult? best;
-    double bestScore = double.negativeInfinity;
+    int bestScore = -1;
 
     for (final entry in _kAutoDetectLanguages.entries) {
       onProgress?.call(entry.value);
-      final result = await local.recognize(preparedPath, language: entry.key);
-      final score = _score(result.text, entry.key);
-      if (score > bestScore) {
-        bestScore = score;
-        best = result;
-      }
-    }
 
-    // If the specialised Nastaliq pass produced a plausible result, prefer it
-    // over a generic Arabic result. This protects Urdu posters/newspaper-style
-    // text from being incorrectly labelled Arabic.
-    onProgress?.call('Verifying Urdu text…');
-    final urdu = await local.recognize(preparedPath, language: 'urd_naw');
-    final urduScore = _score(urdu.text, 'urd_naw');
-    if (urdu.text.isNotEmpty && urduScore >= 360) {
-      if (best == null || urduScore >= bestScore - 45) {
-        best = urdu;
-      }
-    }
+      try {
+        final result = await local.recognize(
+          preparedPath,
+          language: entry.key,
+        );
 
-    // The generic Urdu model is a safety net for images that are Urdu but not
-    // strongly Nastaliq (for example some Naskh/typed Urdu documents).
-    if (best == null || best.text.isEmpty) {
-      onProgress?.call('Retrying Urdu OCR…');
-      final fallback = await local.recognize(preparedPath, language: 'urd');
-      if (fallback.text.isNotEmpty) best = fallback;
+        final score = _score(
+          result.text,
+          language: entry.key,
+        );
+
+        if (score > bestScore) {
+          bestScore = score;
+          best = result;
+        }
+      } catch (_) {
+        // One failed language should not stop the complete OCR process.
+        continue;
+      }
     }
 
     onProgress?.call('Finalizing…');
-    if (best == null || best.text.isEmpty) {
-      throw const FormatException('No readable text found.');
+
+    if (best == null || best.text.trim().isEmpty) {
+      throw const FormatException(
+        'No readable text found.',
+      );
     }
+
     return best;
   }
 
-  double _score(String text, String language) {
+  /// Scores OCR output based on script-aware text quality.
+  ///
+  /// This is intentionally different from simply counting all Unicode
+  /// letters. Urdu and Arabic share the Arabic Unicode block, so we add
+  /// Urdu-specific characters and common Nastaliq/Urdu letters where
+  /// possible.
+  int _score(
+    String text, {
+    String? language,
+  }) {
     final cleaned = text.trim();
-    if (cleaned.isEmpty) return -1000;
 
-    final compact = cleaned.replaceAll(RegExp(r'\s'), '');
-    if (compact.isEmpty) return -1000;
-
-    final letters = language == 'hin'
-        ? RegExp(r'[\u0900-\u097F]')
-        : language == 'eng'
-            ? RegExp(r'[A-Za-z]')
-            : RegExp(r'[\u0600-\u06FF\u0750-\u077F]');
-
-    final letterCount = letters.allMatches(compact).length;
-    final ratio = letterCount / compact.length;
-    final words = cleaned.split(RegExp(r'\s+')).where((w) => w.isNotEmpty).length;
-    var score = (ratio * 700) + (words * 22) + (letterCount * 1.5);
-
-    if (language == 'urd_naw') {
-      // Characters strongly associated with Urdu are a useful discriminator
-      // against Arabic when both scripts are visually similar.
-      final urduSpecific = RegExp(r'[ٹڈڑںھےژگپچڤک]')
-          .allMatches(cleaned)
-          .length;
-      score += urduSpecific * 38;
-      if (words >= 4) score += 80;
+    if (cleaned.isEmpty) {
+      return -1;
     }
-    if (language == 'ara') {
-      final urduSpecific = RegExp(r'[ٹڈڑںھےژگپچڤ]')
-          .allMatches(cleaned)
-          .length;
-      score -= urduSpecific * 32;
+
+    final totalNonSpace = cleaned
+        .replaceAll(RegExp(r'\s'), '')
+        .length;
+
+    if (totalNonSpace == 0) {
+      return -1;
+    }
+
+    final latinLetters = RegExp(
+      r'[A-Za-z]',
+    ).allMatches(cleaned).length;
+
+    final arabicScriptLetters = RegExp(
+      r'[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF]',
+    ).allMatches(cleaned).length;
+
+    final devanagariLetters = RegExp(
+      r'[\u0900-\u097F]',
+    ).allMatches(cleaned).length;
+
+    // Common Urdu-specific letters.
+    final urduSpecificLetters = RegExp(
+      r'[ٹڈڑںھہءےؤئۃ]',
+    ).allMatches(cleaned).length;
+
+    final digits = RegExp(
+      r'[0-9\u0660-\u0669\u06F0-\u06F9]',
+    ).allMatches(cleaned).length;
+
+    final punctuation = RegExp(
+      r'''[.,!?;:'"(){}\[\]،۔؟؛٪%\-–—]''',
+    ).allMatches(cleaned).length;
+
+    int scriptLetters;
+
+    switch (language) {
+      case 'eng':
+        scriptLetters = latinLetters;
+        break;
+
+      case 'hin':
+        scriptLetters = devanagariLetters;
+        break;
+
+      case 'urd':
+      case 'urd_naw':
+        scriptLetters = arabicScriptLetters + urduSpecificLetters;
+        break;
+
+      case 'ara':
+        scriptLetters = arabicScriptLetters;
+        break;
+
+      default:
+        scriptLetters =
+            latinLetters +
+            arabicScriptLetters +
+            devanagariLetters;
+    }
+
+    final meaningfulCharacters =
+        scriptLetters + digits + punctuation;
+
+    final ratio = meaningfulCharacters / totalNonSpace;
+
+    int score = (ratio * 1000).round();
+
+    // Reward longer readable text.
+    score += scriptLetters * 3;
+
+    // Strong bonus for Urdu-specific characters.
+    if (language == 'urd' || language == 'urd_naw') {
+      score += urduSpecificLetters * 12;
+    }
+
+    // Slight preference for the specialized Urdu model when both
+    // Urdu models produce similarly good text.
+    if (language == 'urd_naw' && urduSpecificLetters > 0) {
+      score += 80;
     }
 
     return score;
