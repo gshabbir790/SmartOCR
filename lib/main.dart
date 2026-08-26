@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'core/theme/app_theme.dart';
 import 'features/home/home_screen.dart';
 import 'features/home/onboarding_screen.dart';
+import 'features/home/splash_screen.dart';
 import 'services/ocr/ocr_service.dart';
 import 'services/share/share_intent_service.dart';
 import 'services/storage/history_repository.dart';
@@ -63,13 +64,15 @@ class _SmartOcrAppState extends State<SmartOcrApp> {
           GlobalWidgetsLocalizations.delegate,
           GlobalCupertinoLocalizations.delegate,
         ],
-        home: _showOnboarding
-            ? OnboardingScreen(onDone: _completeOnboarding)
-            : HomeScreen(
-                history: widget.history,
-                ocr: widget.ocr,
-                share: widget.share,
-                onThemeChanged: (m) => setState(() => _mode = m),
-              ),
+        home: SplashScreen(
+          next: _showOnboarding
+              ? OnboardingScreen(onDone: _completeOnboarding)
+              : HomeScreen(
+                  history: widget.history,
+                  ocr: widget.ocr,
+                  share: widget.share,
+                  onThemeChanged: (m) => setState(() => _mode = m),
+                ),
+        ),
       );
 }
