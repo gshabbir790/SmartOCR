@@ -11,6 +11,8 @@ import '../scanner/camera_screen.dart';
 import '../history/history_screen.dart';
 import '../settings/settings_screen.dart';
 
+const kDeveloperCredit = 'Developed & Maintained by Ghulam Shabbir';
+
 class HomeScreen extends StatefulWidget {
   const HomeScreen({
     super.key,
@@ -31,6 +33,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   bool _busy = false;
+  String _stage = '';
 
   @override
   void initState() {
@@ -51,13 +54,21 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _process(List<String> paths, {bool shared = false}) async {
-    setState(() => _busy = true);
+    setState(() {
+      _busy = true;
+      _stage = 'Preparing image…';
+    });
     final texts = <String>[];
     String? firstPath;
     try {
       for (final path in paths) {
         firstPath ??= path;
-        final result = await widget.ocr.recognize(path, language: kAutoDetectLanguage);
+        final result = await widget.ocr.recognize(
+          path,
+          onProgress: (stage) {
+            if (mounted) setState(() => _stage = stage);
+          },
+        );
         texts.add(result.text);
       }
       final combined = texts
@@ -65,7 +76,7 @@ class _HomeScreenState extends State<HomeScreen> {
           .entries
           .map((e) => paths.length > 1 ? '--- Image ${e.key + 1} ---\n${e.value}' : e.value)
           .join('\n\n');
-      
+
       final item = HistoryItem(
         id: const Uuid().v4(),
         path: firstPath!,
@@ -73,9 +84,9 @@ class _HomeScreenState extends State<HomeScreen> {
         createdAt: DateTime.now(),
         title: paths.length > 1 ? '${paths.length} images' : 'Scan',
       );
-      
+
       await widget.history.save(item);
-      
+
       if (mounted) {
         Navigator.of(context).push(
           MaterialPageRoute(
@@ -100,9 +111,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final history = widget.history.all();
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Smart OCR', style: TextStyle(fontWeight: FontWeight.w800)),
+        title: const Text('Smart OCR', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 24)),
         actions: [
           IconButton(
             icon: const Icon(Icons.history_rounded),
@@ -121,105 +133,163 @@ class _HomeScreenState extends State<HomeScreen> {
         ],
       ),
       body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.all(20),
+        child: Stack(
           children: [
-            const SizedBox(height: 12),
-            Text(
-              'Scan anything',
-              style: Theme.of(context).textTheme.displaySmall?.copyWith(
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: -1.2,
-                  ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Extract, understand and use text from images.',
-              style: Theme.of(context).textTheme.bodyLarge,
-            ),
-            const SizedBox(height: 16),
-            Row(
+            Column(
               children: [
-                Icon(Icons.translate_rounded, size: 18, color: Theme.of(context).colorScheme.primary),
-                const SizedBox(width: 8),
-                Text(
-                  'Language is detected automatically',
-                  style: TextStyle(fontWeight: FontWeight.w600, color: Theme.of(context).colorScheme.onSurfaceVariant),
-                ),
-              ],
-            ),
-            const SizedBox(height: 22),
-            IntrinsicHeight(
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Expanded(
-                    child: _ActionCard(
-                      icon: Icons.camera_alt_rounded,
-                      title: 'Scan with Camera',
-                      subtitle: 'Capture a document',
-                      onTap: () async {
-                        final path = await Navigator.push<String?>(
-                          context,
-                          MaterialPageRoute(builder: (_) => const CameraScreen()),
-                        );
-                        if (path != null) await _process([path]);
-                      },
-                    ),
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: _ActionCard(
-                      icon: Icons.photo_library_rounded,
-                      title: 'Gallery',
-                      subtitle: 'Choose one or more',
-                      onTap: _gallery,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 28),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text('Recent scans', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800)),
-                TextButton(
-                  onPressed: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => HistoryScreen(history: widget.history)),
-                  ),
-                  child: const Text('View all'),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            ...widget.history.all().take(5).map(
-                  (item) => _HistoryTile(
-                    item: item,
-                    onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => OcrResultScreen(
-                          item: item,
-                          imagePaths: [item.path],
-                          history: widget.history,
-                        ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Extract, understand and use text from images.',
+                        style: Theme.of(context).textTheme.bodyLarge,
                       ),
-                    ),
+                      const SizedBox(height: 20),
+                      _ActionButton(
+                        icon: Icons.camera_alt_rounded,
+                        title: 'Scan with Camera',
+                        subtitle: 'Capture a document',
+                        onTap: () async {
+                          final path = await Navigator.push<String?>(
+                            context,
+                            MaterialPageRoute(builder: (_) => const CameraScreen()),
+                          );
+                          if (path != null) await _process([path]);
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                      _ActionButton(
+                        icon: Icons.photo_library_rounded,
+                        title: 'Select from Gallery',
+                        subtitle: 'Choose one or more',
+                        onTap: _gallery,
+                      ),
+                      const SizedBox(height: 24),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text('Recent scans', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800)),
+                          TextButton(
+                            onPressed: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (_) => HistoryScreen(history: widget.history)),
+                            ),
+                            child: const Text('View all'),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
                 ),
-            if (widget.history.all().isEmpty) const _EmptyState(),
-            if (_busy) const Padding(padding: EdgeInsets.only(top: 20), child: LinearProgressIndicator()),
+                Expanded(
+                  child: history.isEmpty
+                      ? const Padding(padding: EdgeInsets.symmetric(horizontal: 20), child: _EmptyState())
+                      : ListView.builder(
+                          padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+                          itemCount: history.length,
+                          itemBuilder: (context, i) {
+                            final item = history[i];
+                            return _HistoryTile(
+                              item: item,
+                              onTap: () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => OcrResultScreen(
+                                    item: item,
+                                    imagePaths: [item.path],
+                                    history: widget.history,
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                ),
+              ],
+            ),
+            if (_busy) _ProcessingOverlay(stage: _stage),
           ],
+        ),
+      ),
+      bottomNavigationBar: Container(
+        height: 40,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: Theme.of(context).scaffoldBackgroundColor,
+          border: Border(top: BorderSide(color: Theme.of(context).dividerColor.withValues(alpha: 0.4))),
+        ),
+        child: Text(
+          kDeveloperCredit,
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                fontWeight: FontWeight.w600,
+              ),
         ),
       ),
     );
   }
 }
 
-class _ActionCard extends StatelessWidget {
-  const _ActionCard({
+class _ProcessingOverlay extends StatelessWidget {
+  const _ProcessingOverlay({required this.stage});
+  final String stage;
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned.fill(
+      child: Container(
+        color: Colors.black.withValues(alpha: 0.45),
+        child: Center(
+          child: Container(
+            width: 260,
+            padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 32),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surface,
+              borderRadius: BorderRadius.circular(28),
+              boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 24, offset: Offset(0, 10))],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SizedBox(
+                  width: 56,
+                  height: 56,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 4,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                ),
+                const SizedBox(height: 22),
+                Text(
+                  'Scanning your document',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: 8),
+                AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 250),
+                  child: Text(
+                    stage.isEmpty ? 'Working…' : stage,
+                    key: ValueKey(stage),
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ActionButton extends StatelessWidget {
+  const _ActionButton({
     required this.icon,
     required this.title,
     required this.subtitle,
@@ -234,26 +304,33 @@ class _ActionCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Card(
       child: InkWell(
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(22),
         onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+          child: Row(
             children: [
               Container(
-                width: 52,
-                height: 52,
+                width: 48,
+                height: 48,
                 decoration: BoxDecoration(
                   color: Theme.of(context).colorScheme.primaryContainer,
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.circular(15),
                 ),
                 child: Icon(icon, color: Theme.of(context).colorScheme.primary),
               ),
-              const SizedBox(height: 22),
-              Text(title, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
-              const SizedBox(height: 6),
-              Text(subtitle, style: Theme.of(context).textTheme.bodySmall),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+                    const SizedBox(height: 3),
+                    Text(subtitle, style: Theme.of(context).textTheme.bodySmall),
+                  ],
+                ),
+              ),
+              Icon(Icons.chevron_right_rounded, color: Theme.of(context).colorScheme.outline),
             ],
           ),
         ),
@@ -264,7 +341,7 @@ class _ActionCard extends StatelessWidget {
 
 class _HistoryTile extends StatelessWidget {
   const _HistoryTile({required this.item, required this.onTap});
-  
+
   final HistoryItem item;
   final VoidCallback onTap;
 
