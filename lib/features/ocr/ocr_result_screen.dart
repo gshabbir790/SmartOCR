@@ -68,9 +68,18 @@ class _OcrResultScreenState extends State<OcrResultScreen> {
     await launchUrl(uri, mode: LaunchMode.externalApplication);
   }
 
+  bool _isRtlText(String text) {
+    final rtl = RegExp(r'[\u0590-\u08FF]');
+    final ltr = RegExp(r'[A-Za-z]');
+    final rtlCount = rtl.allMatches(text).length;
+    final ltrCount = ltr.allMatches(text).length;
+    return rtlCount > 0 && rtlCount >= ltrCount;
+  }
+
   @override
   Widget build(BuildContext context) {
     final imageExists = File(widget.item.path).existsSync();
+    final isRtl = _isRtlText(_text.text);
 
     return Scaffold(
       appBar: AppBar(
@@ -110,8 +119,16 @@ class _OcrResultScreenState extends State<OcrResultScreen> {
           TextField(
             controller: _text,
             maxLines: null,
+            textDirection: isRtl ? TextDirection.rtl : TextDirection.ltr,
+            textAlign: isRtl ? TextAlign.right : TextAlign.left,
+            style: const TextStyle(
+              fontSize: 17,
+              height: 1.8,
+              letterSpacing: 0,
+            ),
             decoration: const InputDecoration(
               hintText: 'Extracted text',
+              alignLabelWithHint: true,
             ),
           ),
           const SizedBox(height: 14),
