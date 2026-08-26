@@ -10,7 +10,7 @@ abstract interface class OcrProvider {
 
 class LocalTesseractProvider implements OcrProvider {
   @override
-  Future<OcrResult> recognize(String path, {String language = 'eng'}) async {
+  Future<OcrResult> recognize(String path, {String language = kAutoDetectLanguage}) async {
     // یہاں بریکٹس { } شامل کیے گئے ہیں
     if (!await File(path).exists()) {
       throw const FileSystemException('Image not found');
@@ -44,6 +44,12 @@ const kSupportedOcrLanguages = <String, String>{
   'hin': 'हिन्दी (Hindi)',
 };
 
+/// Tesseract has no single "detect the language" call, but it can load
+/// several language models for one recognition pass and pick whichever
+/// characters score best per line. Combining every bundled language here
+/// is what gives users the "auto" behaviour: no manual picker needed.
+const kAutoDetectLanguage = 'eng+urd+ara+hin';
+
 class OcrService {
   final OcrProvider local = LocalTesseractProvider();
   final ImagePreprocessor _preprocessor = ImagePreprocessor();
@@ -51,7 +57,7 @@ class OcrService {
 
   /// Preprocesses [path] (deskew/resize/contrast) before running Tesseract,
   /// which measurably improves accuracy on phone-camera photos.
-  Future<OcrResult> recognize(String path, {String language = 'eng'}) async {
+  Future<OcrResult> recognize(String path, {String language = kAutoDetectLanguage}) async {
     String preparedPath = path;
     try {
       preparedPath = await _preprocessor.prepare(path);
