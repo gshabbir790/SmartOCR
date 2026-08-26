@@ -31,19 +31,26 @@ jobs:
       - name: Download Tesseract trained data
         run: |
           mkdir -p assets/tessdata
+          # Fast models for the general languages.
           for lang in eng ara hin; do
-            curl -fL -o "assets/tessdata/${lang}.traineddata" \
+            curl -fL --retry 3 -o "assets/tessdata/${lang}.traineddata" \
               "https://github.com/tesseract-ocr/tessdata_fast/raw/main/${lang}.traineddata"
           done
-          # Urdu is the app's most sensitive script: use Tesseract's larger
-          # best model instead of the speed model for noticeably better
-          # Nastaliq recognition.
-          curl -fL -o assets/tessdata/urd.traineddata \
+
+          # Official high-accuracy Urdu model as a fallback.
+          curl -fL --retry 3 -o assets/tessdata/urd.traineddata \
             "https://github.com/tesseract-ocr/tessdata_best/raw/main/urd.traineddata"
+
+          # Community-contributed model specifically trained for Urdu Nastaliq.
+          # This is the primary Urdu model used by Smart OCR.
+          curl -fL --retry 3 -o assets/tessdata/urd_naw.traineddata \
+            "https://github.com/tesseract-ocr/tessdata_contrib/raw/main/urd_naw/urd_naw.traineddata"
+
           cat << 'EOF' > assets/tessdata_config.json
           {
             "files": [
               "eng.traineddata",
+              "urd_naw.traineddata",
               "urd.traineddata",
               "ara.traineddata",
               "hin.traineddata"
