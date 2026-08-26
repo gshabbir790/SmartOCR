@@ -12,15 +12,25 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # ---------------------------------------------------------
+      # 1. Checkout
+      # ---------------------------------------------------------
       - name: Checkout Code
         uses: actions/checkout@v4
 
+      # ---------------------------------------------------------
+      # 2. Java
+      # ---------------------------------------------------------
       - name: Setup Java Environment
         uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
           java-version: '17'
+          cache: gradle
 
+      # ---------------------------------------------------------
+      # 3. Flutter
+      # ---------------------------------------------------------
       - name: Setup Flutter SDK
         uses: subosito/flutter-action@v2
         with:
@@ -28,53 +38,100 @@ jobs:
           channel: 'stable'
           cache: true
 
+      # ---------------------------------------------------------
+      # 4. Download Tesseract OCR models
+      # ---------------------------------------------------------
+      #
+      # Urdu:
+      #   urd_naw = specialized Urdu Nastaliq model
+      #   urd     = official high-accuracy fallback
+      #
+      # English / Arabic / Hindi:
+      #   tessdata_fast for smaller APK + faster OCR
+      #
+      # Tesseract officially provides tessdata_best for
+      # higher-accuracy models. urd_naw is a contributed
+      # Urdu-Nastaliq model.
+      # ---------------------------------------------------------
       - name: Download Tesseract trained data
+        shell: bash
         run: |
+          set -euo pipefail
+
           mkdir -p assets/tessdata
 
-          # English
-          curl -fL --retry 3 \
+          echo "Downloading English model..."
+          curl -fL --retry 3 --retry-delay 2 \
             -o assets/tessdata/eng.traineddata \
             https://github.com/tesseract-ocr/tessdata_fast/raw/main/eng.traineddata
 
-          # Arabic
-          curl -fL --retry 3 \
+          echo "Downloading Arabic model..."
+          curl -fL --retry 3 --retry-delay 2 \
             -o assets/tessdata/ara.traineddata \
             https://github.com/tesseract-ocr/tessdata_fast/raw/main/ara.traineddata
 
-          # Hindi
-          curl -fL --retry 3 \
+          echo "Downloading Hindi model..."
+          curl -fL --retry 3 --retry-delay 2 \
             -o assets/tessdata/hin.traineddata \
             https://github.com/tesseract-ocr/tessdata_fast/raw/main/hin.traineddata
 
-          # Official high-accuracy Urdu model
-          curl -fL --retry 3 \
+          echo "Downloading official high-accuracy Urdu model..."
+          curl -fL --retry 3 --retry-delay 2 \
             -o assets/tessdata/urd.traineddata \
             https://github.com/tesseract-ocr/tessdata_best/raw/main/urd.traineddata
 
-          # Urdu Nastaliq specialized model
-          curl -fL --retry 3 \
+          echo "Downloading specialized Urdu Nastaliq model..."
+          curl -fL --retry 3 --retry-delay 2 \
             -o assets/tessdata/urd_naw.traineddata \
-            https://github.com/tesseract-ocr/tessdata_contrib/raw/main/urd_naw/urd_naw.traineddata
+            https://github.com/tesseract-ocr/tessdata_contrib/raw/main/urd_naw/best/urd_naw.traineddata
 
+          echo ""
           echo "Downloaded OCR models:"
           ls -lh assets/tessdata/
 
-          cat << 'EOF' > assets/tessdata_config.json
+          echo ""
+          echo "Checking required files..."
+
+          test -s assets/tessdata/eng.traineddata
+          test -s assets/tessdata/ara.traineddata
+          test -s assets/tessdata/hin.traineddata
+          test -s assets/tessdata/urd.traineddata
+          test -s assets/tessdata/urd_naw.traineddata
+
+          echo "All OCR models downloaded successfully."
+
+      # ---------------------------------------------------------
+      # 5. Generate OCR configuration
+      # ---------------------------------------------------------
+      - name: Generate Tesseract configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          cat > assets/tessdata_config.json << 'EOF'
           {
             "files": [
               "eng.traineddata",
-              "urd_naw.traineddata",
               "urd.traineddata",
+              "urd_naw.traineddata",
               "ara.traineddata",
               "hin.traineddata"
             ]
           }
           EOF
 
+          echo "Generated assets/tessdata_config.json:"
+          cat assets/tessdata_config.json
+
+      # ---------------------------------------------------------
+      # 6. Flutter dependencies
+      # ---------------------------------------------------------
       - name: Install Dependencies
         run: flutter pub get
 
+      # ---------------------------------------------------------
+      # 7. Patch tesseract_ocr duplicate plugin
+      # ---------------------------------------------------------
       - name: Patch tesseract_ocr duplicate plugin
         shell: bash
         run: |
@@ -89,12 +146,46 @@ jobs:
             echo "$TESSERACT_KT"
             rm -f "$TESSERACT_KT"
           else
-            echo "No tesseract_ocr Kotlin plugin file found to patch (version may have changed) — continuing without patching."
+            echo "No duplicate tesseract_ocr Kotlin plugin found."
           fi
 
-      - name: Build Release APK
-        run: flutter build apk --release --android-skip-build-dependency-validation
+      # ---------------------------------------------------------
+      # 8. Verify Flutter project
+      # ---------------------------------------------------------
+      - name: Flutter Analyze
+        run: flutter analyze
+        continue-on-error: true
 
+      # ---------------------------------------------------------
+      # 9. Build Release APK
+      # ---------------------------------------------------------
+      - name: Build Release APK
+        run: |
+          flutter build apk \
+            --release \
+            --android-skip-build-dependency-validation
+
+      # ---------------------------------------------------------
+      # 10. Verify APK
+      # ---------------------------------------------------------
+      - name: Verify APK
+        shell: bash
+        run: |
+          set -e
+
+          APK="build/app/outputs/flutter-apk/app-release.apk"
+
+          if [ ! -f "$APK" ]; then
+            echo "ERROR: APK was not generated."
+            exit 1
+          fi
+
+          echo "APK generated successfully:"
+          ls -lh "$APK"
+
+      # ---------------------------------------------------------
+      # 11. Upload APK
+      # ---------------------------------------------------------
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
