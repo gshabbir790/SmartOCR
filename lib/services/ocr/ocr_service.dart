@@ -47,18 +47,17 @@ const kSupportedOcrLanguages = <String, String>{
 /// so the UI can show real progress instead of a generic spinner.
 typedef OcrProgressCallback = void Function(String stage);
 
-/// Auto-detect works by running Tesseract once per *script family* rather
-/// than loading every language into one pass. Merging eng+urd+ara+hin into
-/// a single Tesseract call (the previous approach) made it pick characters
-/// from whichever language's dictionary scored a fragment best line-by-line,
-/// which badly garbled Urdu/Arabic's connected Nastaliq script in
-/// particular — English still looked fine because Latin text is far less
-/// sensitive to this. Keeping script-compatible languages together (Urdu
-/// and Arabic share the same Arabic script) and scoring each attempt's
-/// output afterwards gives much cleaner results per language.
-const _kAutoDetectGroups = <String, String>{
+/// Auto-detect works by running Tesseract once per language, completely
+/// separately, and scoring each attempt's output afterwards. An earlier
+/// version combined Urdu and Arabic into one "urd+ara" pass on the
+/// (reasonable-sounding) theory that same-script languages are safe to
+/// merge — but Urdu's Nastaliq shaping is different enough from Arabic's
+/// Naskh-style shaping that mixing their dictionaries made Urdu *worse*,
+/// not better. Every language now gets its own fully isolated pass.
+const _kAutoDetectLanguages = <String, String>{
   'eng': 'Reading English text…',
-  'urd+ara': 'Reading Urdu / Arabic text…',
+  'urd': 'Reading Urdu text…',
+  'ara': 'Reading Arabic text…',
   'hin': 'Reading Hindi text…',
 };
 
@@ -83,7 +82,7 @@ class OcrService {
 
     OcrResult? best;
     int bestScore = -1;
-    for (final entry in _kAutoDetectGroups.entries) {
+    for (final entry in _kAutoDetectLanguages.entries) {
       onProgress?.call(entry.value);
       final result = await local.recognize(preparedPath, language: entry.key);
       final score = _score(result.text);
