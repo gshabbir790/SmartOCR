@@ -1,1 +1,4 @@
-<resources><color name="transparent">#00000000</color></resources>
+<resources>
+    <color name="transparent">#00000000</color>
+    <color name="splash_background">#4967F5</color>
+</resources>
