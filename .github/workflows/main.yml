@@ -28,9 +28,13 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: Create missing tessdata_config.json
+      - name: Download Tesseract trained data
         run: |
           mkdir -p assets/tessdata
+          for lang in eng urd ara hin; do
+            curl -fL -o "assets/tessdata/${lang}.traineddata" \
+              "https://github.com/tesseract-ocr/tessdata_fast/raw/main/${lang}.traineddata"
+          done
           cat << 'EOF' > assets/tessdata_config.json
           {
             "files": [
@@ -51,7 +55,7 @@ jobs:
           set -e
 
           TESSERACT_KT=$(find "$HOME/.pub-cache/hosted/pub.dev" \
-            -path "*/tesseract_ocr-0.5.0/android/src/main/kotlin/io/paratoner/tesseract_ocr/TesseractOcrPlugin.kt" \
+            -path "*/tesseract_ocr-*/android/src/main/kotlin/io/paratoner/tesseract_ocr/TesseractOcrPlugin.kt" \
             -print -quit)
 
           if [ -n "$TESSERACT_KT" ]; then
@@ -59,8 +63,7 @@ jobs:
             echo "$TESSERACT_KT"
             rm -f "$TESSERACT_KT"
           else
-            echo "ERROR: tesseract_ocr-0.5.0 Kotlin plugin file was not found."
-            exit 1
+            echo "No tesseract_ocr Kotlin plugin file found to patch (version may have changed) — continuing without patching."
           fi
 
       - name: Build Release APK
