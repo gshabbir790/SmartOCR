@@ -67,10 +67,10 @@ jobs:
           fi
 
       - name: Build Release APK
-        run: flutter build apk --release --no-tree-shake-icons --android-skip-build-dependency-validation
+        run: flutter build apk --release --split-per-abi --android-skip-build-dependency-validation
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: release-apk
-          path: build/app/outputs/flutter-apk/app-release.apk
+          path: build/app/outputs/flutter-apk/*.apk
