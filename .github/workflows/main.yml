@@ -31,20 +31,34 @@ jobs:
       - name: Download Tesseract trained data
         run: |
           mkdir -p assets/tessdata
-          # Fast models for the general languages.
-          for lang in eng ara hin; do
-            curl -fL --retry 3 -o "assets/tessdata/${lang}.traineddata" \
-              "https://github.com/tesseract-ocr/tessdata_fast/raw/main/${lang}.traineddata"
-          done
 
-          # Official high-accuracy Urdu model as a fallback.
-          curl -fL --retry 3 -o assets/tessdata/urd.traineddata \
-            "https://github.com/tesseract-ocr/tessdata_best/raw/main/urd.traineddata"
+          # English
+          curl -fL --retry 3 \
+            -o assets/tessdata/eng.traineddata \
+            https://github.com/tesseract-ocr/tessdata_fast/raw/main/eng.traineddata
 
-          # Community-contributed model specifically trained for Urdu Nastaliq.
-          # This is the primary Urdu model used by Smart OCR.
-          curl -fL --retry 3 -o assets/tessdata/urd_naw.traineddata \
-            "https://github.com/tesseract-ocr/tessdata_contrib/raw/main/urd_naw/urd_naw.traineddata"
+          # Arabic
+          curl -fL --retry 3 \
+            -o assets/tessdata/ara.traineddata \
+            https://github.com/tesseract-ocr/tessdata_fast/raw/main/ara.traineddata
+
+          # Hindi
+          curl -fL --retry 3 \
+            -o assets/tessdata/hin.traineddata \
+            https://github.com/tesseract-ocr/tessdata_fast/raw/main/hin.traineddata
+
+          # Official high-accuracy Urdu model
+          curl -fL --retry 3 \
+            -o assets/tessdata/urd.traineddata \
+            https://github.com/tesseract-ocr/tessdata_best/raw/main/urd.traineddata
+
+          # Urdu Nastaliq specialized model
+          curl -fL --retry 3 \
+            -o assets/tessdata/urd_naw.traineddata \
+            https://github.com/tesseract-ocr/tessdata_contrib/raw/main/urd_naw/urd_naw.traineddata
+
+          echo "Downloaded OCR models:"
+          ls -lh assets/tessdata/
 
           cat << 'EOF' > assets/tessdata_config.json
           {
@@ -85,9 +99,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: release-apk
-          # A single universal APK containing every architecture
-          # (armeabi-v7a, arm64-v8a, x86_64), so it installs on any
-          # Android device regardless of processor type. This is larger
-          # than a single-architecture split APK, but guarantees it
-          # will actually install on your phone.
           path: build/app/outputs/flutter-apk/app-release.apk
