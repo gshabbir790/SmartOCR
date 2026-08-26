@@ -3,8 +3,14 @@ import 'package:flutter/material.dart';
 /// Shown immediately after the native Android launch screen (which is just
 /// the brand color + icon, since XML drawables can't reliably render text
 /// across devices/fonts). This widget carries the actual branding — app
-/// name and developer credit — for a short, fixed duration before handing
-/// off to onboarding or home.
+/// name and developer credit.
+///
+/// Deliberately has NO entrance animation: an earlier version faded the
+/// icon+text in together over 700ms, but because the native launch screen
+/// already shows the icon at full opacity, the handoff moment made it look
+/// like the icon appeared first and the text caught up late. Rendering
+/// everything at full opacity from the first frame removes that flicker —
+/// icon and text are visually identical the instant Flutter takes over.
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key, required this.next});
   final Widget next;
@@ -13,32 +19,18 @@ class SplashScreen extends StatefulWidget {
   State<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderStateMixin {
-  static const _kSplashDuration = Duration(milliseconds: 2000);
-  late final AnimationController _controller;
-  late final Animation<double> _fade;
-  late final Animation<double> _scale;
+class _SplashScreenState extends State<SplashScreen> {
+  static const _kSplashDuration = Duration(milliseconds: 1800);
 
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(vsync: this, duration: const Duration(milliseconds: 700));
-    _fade = CurvedAnimation(parent: _controller, curve: Curves.easeOut);
-    _scale = Tween<double>(begin: 0.88, end: 1.0).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutBack));
-    _controller.forward();
-
     Future.delayed(_kSplashDuration, () {
       if (!mounted) return;
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(builder: (_) => widget.next),
       );
     });
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
   }
 
   @override
@@ -51,75 +43,52 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
           child: Column(
             children: [
               const Spacer(flex: 5),
-              FadeTransition(
-                opacity: _fade,
-                child: ScaleTransition(
-                  scale: _scale,
-                  child: const Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      _Logo(),
-                      SizedBox(height: 26),
-                      Text(
-                        'Smart OCR',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 34,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: -0.5,
-                        ),
-                      ),
-                      SizedBox(height: 10),
-                      Text(
-                        'Scan. Extract. Understand.',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: Colors.white70,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          letterSpacing: 0.6,
-                        ),
-                      ),
-                    ],
-                  ),
+              Container(
+                width: 116,
+                height: 116,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.16),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.document_scanner_rounded, size: 58, color: Colors.white),
+              ),
+              const SizedBox(height: 26),
+              const Text(
+                'Smart OCR',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 34,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: -0.5,
+                ),
+              ),
+              const SizedBox(height: 10),
+              const Text(
+                'Scan. Extract. Understand.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Colors.white70,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0.6,
                 ),
               ),
               const Spacer(flex: 6),
-              FadeTransition(
-                opacity: _fade,
-                child: const Text(
-                  'Developed & Maintained by Ghulam Shabbir',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: Colors.white70,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 0.2,
-                  ),
+              const Text(
+                'Developed & Maintained by Ghulam Shabbir',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Colors.white70,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0.2,
                 ),
               ),
             ],
           ),
         ),
       ),
-    );
-  }
-}
-
-class _Logo extends StatelessWidget {
-  const _Logo();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 116,
-      height: 116,
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.16),
-        shape: BoxShape.circle,
-      ),
-      child: const Icon(Icons.document_scanner_rounded, size: 58, color: Colors.white),
     );
   }
 }
