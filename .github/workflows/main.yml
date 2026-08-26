@@ -31,10 +31,15 @@ jobs:
       - name: Download Tesseract trained data
         run: |
           mkdir -p assets/tessdata
-          for lang in eng urd ara hin; do
+          for lang in eng ara hin; do
             curl -fL -o "assets/tessdata/${lang}.traineddata" \
               "https://github.com/tesseract-ocr/tessdata_fast/raw/main/${lang}.traineddata"
           done
+          # Urdu is the app's most sensitive script: use Tesseract's larger
+          # best model instead of the speed model for noticeably better
+          # Nastaliq recognition.
+          curl -fL -o assets/tessdata/urd.traineddata \
+            "https://github.com/tesseract-ocr/tessdata_best/raw/main/urd.traineddata"
           cat << 'EOF' > assets/tessdata_config.json
           {
             "files": [
