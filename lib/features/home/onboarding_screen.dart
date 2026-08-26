@@ -49,7 +49,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 width: 140,
                 height: 140,
                 decoration: const BoxDecoration(color: Color(0xFFE9EDFF), shape: BoxShape.circle),
-                child: Icon(p.$2, size: 68, color: const Color(0xFF4967F5)),
+                child: Icon(p.$2, size: 68, color: Theme.of(context).colorScheme.primary),
               ),
               const SizedBox(height: 44),
               Text(p.$1, style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w900), textAlign: TextAlign.center),
