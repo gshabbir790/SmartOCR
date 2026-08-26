@@ -36,7 +36,6 @@ class SmartOcrApp extends StatefulWidget {
 
 class _SmartOcrAppState extends State<SmartOcrApp> {
   ThemeMode _mode = ThemeMode.system;
-  late bool _showOnboarding = widget.showOnboarding;
 
   @override
   void initState() {
@@ -47,32 +46,34 @@ class _SmartOcrAppState extends State<SmartOcrApp> {
   Future<void> _completeOnboarding() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_kOnboardingSeenKey, true);
-    if (mounted) setState(() => _showOnboarding = false);
   }
 
   @override
-  Widget build(BuildContext context) => MaterialApp(
-        title: 'Smart OCR',
-        debugShowCheckedModeBanner: false,
-        theme: AppTheme.light,
-        darkTheme: AppTheme.dark,
-        themeMode: _mode,
-        locale: const Locale('en'),
-        supportedLocales: const [Locale('en'), Locale('ur'), Locale('ar'), Locale('hi')],
-        localizationsDelegates: const [
-          GlobalMaterialLocalizations.delegate,
-          GlobalWidgetsLocalizations.delegate,
-          GlobalCupertinoLocalizations.delegate,
-        ],
-        home: SplashScreen(
-          next: _showOnboarding
-              ? OnboardingScreen(onDone: _completeOnboarding)
-              : HomeScreen(
-                  history: widget.history,
-                  ocr: widget.ocr,
-                  share: widget.share,
-                  onThemeChanged: (m) => setState(() => _mode = m),
-                ),
-        ),
-      );
+  Widget build(BuildContext context) {
+    final home = HomeScreen(
+      history: widget.history,
+      ocr: widget.ocr,
+      share: widget.share,
+      onThemeChanged: (m) => setState(() => _mode = m),
+    );
+    return MaterialApp(
+      title: 'Smart OCR',
+      debugShowCheckedModeBanner: false,
+      theme: AppTheme.light,
+      darkTheme: AppTheme.dark,
+      themeMode: _mode,
+      locale: const Locale('en'),
+      supportedLocales: const [Locale('en'), Locale('ur'), Locale('ar'), Locale('hi')],
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      home: SplashScreen(
+        next: widget.showOnboarding
+            ? OnboardingScreen(onDone: _completeOnboarding, home: home)
+            : home,
+      ),
+    );
+  }
 }
