@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 import '../../data/models/ocr_models.dart';
 import '../../services/ocr/ocr_service.dart';
@@ -58,6 +59,8 @@ class _HomeScreenState extends State<HomeScreen> {
       _busy = true;
       _stage = 'Preparing image…';
     });
+    final prefs = await SharedPreferences.getInstance();
+    final language = prefs.getString(kOcrLanguagePrefKey) ?? 'auto';
     final texts = <String>[];
     String? firstPath;
     try {
@@ -65,6 +68,7 @@ class _HomeScreenState extends State<HomeScreen> {
         firstPath ??= path;
         final result = await widget.ocr.recognize(
           path,
+          language: language,
           onProgress: (stage) {
             if (mounted) setState(() => _stage = stage);
           },
