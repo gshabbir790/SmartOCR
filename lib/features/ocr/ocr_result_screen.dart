@@ -3,11 +3,15 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../data/models/ocr_models.dart';
+import '../../services/ai/ai_service.dart';
 import '../../services/storage/history_repository.dart';
 import '../conversation/conversation_screen.dart';
+import '../settings/settings_screen.dart'
+    show kAiBackendUrlPrefKey, kCloudFallbackPrefKey;
 
 class OcrResultScreen extends StatefulWidget {
   const OcrResultScreen({
@@ -27,11 +31,62 @@ class OcrResultScreen extends StatefulWidget {
 
 class _OcrResultScreenState extends State<OcrResultScreen> {
   late final TextEditingController _text;
+  String? _aiBackendUrl;
+  bool _cloudFallbackEnabled = false;
+  bool _aiOcrBusy = false;
 
   @override
   void initState() {
     super.initState();
     _text = TextEditingController(text: widget.item.text);
+    _loadAiSettings();
+  }
+
+  Future<void> _loadAiSettings() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
+    setState(() {
+      _aiBackendUrl = prefs.getString(kAiBackendUrlPrefKey);
+      _cloudFallbackEnabled = prefs.getBool(kCloudFallbackPrefKey) ?? false;
+    });
+  }
+
+  Future<void> _tryAiOcr() async {
+    final url = _aiBackendUrl;
+    if (url == null || url.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Add an AI backend URL in Settings first.')),
+      );
+      return;
+    }
+    if (!File(widget.item.path).existsSync()) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Original image is no longer available.')),
+      );
+      return;
+    }
+
+    setState(() => _aiOcrBusy = true);
+    try {
+      final result = await CloudOcrProvider(url).extractText(widget.item.path);
+      if (result.trim().isEmpty) {
+        throw Exception('empty');
+      }
+      if (mounted) {
+        setState(() => _text.text = result);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Updated with AI OCR result. Review and Save if it looks right.')),
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('AI OCR failed. Check your internet connection and backend URL.')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _aiOcrBusy = false);
+    }
   }
 
   @override
@@ -152,6 +207,18 @@ class _OcrResultScreenState extends State<OcrResultScreen> {
                   ),
                 ),
               ),
+              if (_cloudFallbackEnabled)
+                ActionChip(
+                  label: Text(_aiOcrBusy ? 'Reading with AI…' : 'Try AI OCR'),
+                  avatar: _aiOcrBusy
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.auto_fix_high),
+                  onPressed: _aiOcrBusy ? null : _tryAiOcr,
+                ),
             ],
           ),
         ],
