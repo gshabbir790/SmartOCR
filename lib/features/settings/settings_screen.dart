@@ -5,10 +5,18 @@ const kAiBackendUrlPrefKey = 'ai_backend_url';
 const kAutoOcrPrefKey = 'auto_ocr';
 const kCloudFallbackPrefKey = 'cloud_ocr_fallback';
 const kSaveOriginalsPrefKey = 'save_originals';
+const kOcrLanguagePrefKey = 'ocr_language';
+
+const kOcrLanguageOptions = <String, String>{
+  'auto': 'Auto (English + Urdu)',
+  'urd': 'Urdu only (best for Nastaliq)',
+  'eng': 'English only',
+};
 
 class SettingsScreen extends StatefulWidget { const SettingsScreen({super.key, required this.onThemeChanged}); final ValueChanged<ThemeMode> onThemeChanged; @override State<SettingsScreen> createState()=>_SettingsScreenState(); }
 class _SettingsScreenState extends State<SettingsScreen>{
   bool auto=true;bool cloud=false;bool originals=true;
+  String ocrLanguage = 'auto';
   final _urlController = TextEditingController();
   bool _loaded = false;
 
@@ -22,6 +30,7 @@ class _SettingsScreenState extends State<SettingsScreen>{
       auto = prefs.getBool(kAutoOcrPrefKey) ?? true;
       cloud = prefs.getBool(kCloudFallbackPrefKey) ?? false;
       originals = prefs.getBool(kSaveOriginalsPrefKey) ?? true;
+      ocrLanguage = prefs.getString(kOcrLanguagePrefKey) ?? 'auto';
       _urlController.text = prefs.getString(kAiBackendUrlPrefKey) ?? '';
       _loaded = true;
     });
@@ -30,6 +39,11 @@ class _SettingsScreenState extends State<SettingsScreen>{
   Future<void> _saveBool(String key, bool value) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(key, value);
+  }
+
+  Future<void> _saveLanguage(String value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(kOcrLanguagePrefKey, value);
   }
 
   Future<void> _saveUrl(String value) async {
@@ -48,6 +62,21 @@ class _SettingsScreenState extends State<SettingsScreen>{
   @override
   Widget build(BuildContext context)=>Scaffold(appBar:AppBar(title:const Text('Settings')),body: !_loaded ? const Center(child: CircularProgressIndicator()) : ListView(padding:const EdgeInsets.all(16),children:[
     const ListTile(title:Text('Preferences',style:TextStyle(fontWeight:FontWeight.w800))),
+    ListTile(
+      title: const Text('OCR language'),
+      subtitle: const Text('Which script to expect when scanning'),
+      trailing: DropdownButton<String>(
+        value: ocrLanguage,
+        items: kOcrLanguageOptions.entries
+            .map((e) => DropdownMenuItem(value: e.key, child: Text(e.value)))
+            .toList(),
+        onChanged: (v) {
+          if (v == null) return;
+          setState(() => ocrLanguage = v);
+          _saveLanguage(v);
+        },
+      ),
+    ),
     SwitchListTile(title:const Text('Auto OCR'),subtitle:const Text('Start OCR after import/share'),value:auto,onChanged:(v){setState(()=>auto=v);_saveBool(kAutoOcrPrefKey, v);}),
     SwitchListTile(title:const Text('Cloud OCR fallback'),subtitle:const Text('Only used when enabled'),value:cloud,onChanged:(v){setState(()=>cloud=v);_saveBool(kCloudFallbackPrefKey, v);}),
     SwitchListTile(title:const Text('Save original images'),value:originals,onChanged:(v){setState(()=>originals=v);_saveBool(kSaveOriginalsPrefKey, v);}),
