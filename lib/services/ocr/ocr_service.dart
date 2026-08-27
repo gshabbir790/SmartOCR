@@ -54,8 +54,16 @@ class LocalTesseractProvider implements OcrProvider {
       case 'hin':
         return 'hin';
 
+      // 'auto' (the new default): the caller doesn't know in advance
+      // whether the image is English or Urdu, so ask Tesseract to load
+      // both dictionaries in the SAME single pass. This is still ONE
+      // Tesseract operation (not a multi-language loop) — Tesseract
+      // natively supports combined language strings like this.
+      case 'auto':
+        return 'eng+urd';
+
       default:
-        return 'eng';
+        return 'eng+urd';
     }
   }
 
@@ -216,16 +224,22 @@ class OcrService {
     String path, {
     OcrProgressCallback? onProgress,
 
-    /// Default is Urdu Nastaliq because Urdu is currently
-    /// the primary OCR requirement.
+    /// Default is 'auto' (English + Urdu combined in a single pass),
+    /// because the caller (home_screen) doesn't ask the user which
+    /// language a given image is before scanning. Previously this
+    /// defaulted to 'urd' unconditionally, which forced the Urdu
+    /// Nastaliq model onto plain English documents and produced
+    /// unreadable output. Pass an explicit language to force one
+    /// script when you know it in advance (e.g. from a Settings
+    /// preference) — see kOcrLanguagePrefKey in settings_screen.dart.
     ///
     /// Supported:
-    ///   urd
-    ///   urd_naw
+    ///   auto (eng+urd, default)
+    ///   urd / urd_naw
     ///   eng
     ///   ara
     ///   hin
-    String language = 'urd',
+    String language = 'auto',
   }) async {
     onProgress?.call(
       'Preparing image…',
@@ -273,6 +287,9 @@ class OcrService {
 
   String _progressText(String language) {
     switch (language.toLowerCase()) {
+      case 'auto':
+        return 'Reading text…';
+
       case 'urd':
       case 'ur':
       case 'urdu':
